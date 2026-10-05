@@ -12,6 +12,6 @@
     "dotenv": "^16.4.7",
     "express": "^5.1.0",
     "multer": "^2.0.2",
-    "nodemailer": "^7.0.5"
+    "resend": "^6.32.0"
   }
 }

@@ -12,5 +12,8 @@
     "build": "npm run build --workspace frontend",
     "backend": "npm run dev --workspace backend",
     "blockchain:test": "npm test --workspace blockchain"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }

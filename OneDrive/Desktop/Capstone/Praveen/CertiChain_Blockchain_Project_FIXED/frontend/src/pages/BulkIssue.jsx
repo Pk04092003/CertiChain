@@ -211,7 +211,7 @@ async function sendCertificateEmail({ record, dataUrl, verificationUrl }) {
 
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
-    const prefix = data?.code === "SMTP_NOT_CONFIGURED" ? "SMTP setup required: " : "Email service error: ";
+    const prefix = data?.code === "EMAIL_NOT_CONFIGURED" ? "Email setup required: " : "Email service error: ";
     throw new Error(`${prefix}${data.error || "Email service returned an error."}`);
   }
 
@@ -469,14 +469,14 @@ export default function BulkIssue() {
       const result = await sendCertificateEmail({ record, dataUrl, verificationUrl });
 
       const sent = Boolean(result.sent);
-      const statusText = sent ? "Sent" : "Not sent — SMTP is not configured";
+      const statusText = sent ? "Sent" : "Not sent — email service is not configured";
       setSingleEmailState(sent ? "sent" : "demo");
       setEmailStatus((current) => ({ ...current, [generatedId]: statusText }));
       persistRecords([{ ...record, emailStatus: statusText, emailSentAt: sent ? new Date().toISOString() : null }]);
       setMessage(
         sent
           ? `Certificate ${generatedId} was emailed to ${email}.`
-          : `Email was not sent because the backend is running in demo mode. Configure SMTP in backend/.env.`
+          : `Email was not sent because the backend is running in demo mode. Configure RESEND_API_KEY and RESEND_FROM in the backend environment.`
       );
     } catch (error) {
       console.error(error);
@@ -572,7 +572,7 @@ export default function BulkIssue() {
     // Certificate creation is independent from email delivery. A participant
     // record can be issued even when its email is a test/placeholder address
     // or needs correction later. Email validation is handled by the email
-    // sending step so issuance itself cannot be blocked by SMTP/test data.
+    // sending step so issuance itself cannot be blocked by email delivery/test data.
     const rowsWithMissingEmail = rows
       .map((row, index) => ({ row, index, email: getCsvEmail(row) }))
       .filter(({ email }) => !email);
@@ -740,16 +740,16 @@ export default function BulkIssue() {
       setBulkEmailState({ status: "sending", sent: 0, failed: 0, total });
       setEmailStatus((current) => ({ ...current, ...Object.fromEntries(recordsToSend.map((record) => [record.id, "Retrying…"])) }));
     }
-    setMessage(`${isRetry ? "Retrying" : "Preparing"} ${total} participant certificates. They will be dispatched to SMTP immediately in parallel…`);
+    setMessage(`${isRetry ? "Retrying" : "Preparing"} ${total} participant certificates. They will be dispatched through Resend immediately in parallel…`);
 
     try {
       const serverStatus = await getEmailServerStatus();
       if (!serverStatus.configured) {
-        const statusText = "Not sent — SMTP not configured";
+        const statusText = "Not sent — email service not configured";
         recordsToSend.forEach((record) => updateRecordEmailStatus(record.id, statusText));
         setEmailStatus((current) => ({ ...current, ...Object.fromEntries(recordsToSend.map((record) => [record.id, statusText])) }));
         setBulkEmailState({ status: "failed", sent: 0, failed: total, total });
-        setMessage("Email was not sent because SMTP is not configured. Add SMTP settings to backend/.env, restart the backend, then try again.");
+        setMessage("Email was not sent because the Resend email service is not configured. Add RESEND_API_KEY and RESEND_FROM to the backend environment, then redeploy/restart the backend.");
         return;
       }
 
@@ -842,7 +842,7 @@ export default function BulkIssue() {
       setBulkEmailState({ status: failed === 0 ? "sent" : sent > 0 ? "partial" : "failed", sent, failed, total });
       setMessage(
         failed === 0
-          ? `All ${sent} participant certificates were handed to SMTP for parallel delivery.`
+          ? `All ${sent} participant certificates were handed to Resend for parallel delivery.`
           : `${sent} email${sent === 1 ? "" : "s"} sent, ${failed} failed. Emails were submitted in parallel; the recipient mail provider may still queue or deliver them at different times.`
       );
     } catch (error) {
