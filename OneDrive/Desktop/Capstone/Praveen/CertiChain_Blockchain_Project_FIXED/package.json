@@ -1,0 +1,16 @@
+{
+  "name": "certichain-blockchain-system",
+  "private": true,
+  "version": "1.1.0",
+  "workspaces": [
+    "frontend",
+    "backend",
+    "blockchain"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace frontend",
+    "build": "npm run build --workspace frontend",
+    "backend": "npm run dev --workspace backend",
+    "blockchain:test": "npm test --workspace blockchain"
+  }
+}
