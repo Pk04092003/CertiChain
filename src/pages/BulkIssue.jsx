@@ -18,11 +18,11 @@ import {
   Send,
   Loader2,
   Archive,
+  RefreshCcw,
 } from "lucide-react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { toPng } from "html-to-image";
 import { upsertIssuedCertificates, getCurrentIssuer, updateIssuedCertificate, loadIssuedCertificates } from "../certificateStore";
-import { savePendingEmailBatch } from "../emailBatchStore";
 import { getNextCertificateNumber, loadInstitutionSettings, renderEmailTemplate } from "../institutionStore";
 import { addAuditLog } from "../auditStore";
 import { getSessionUser } from "../authStore";
@@ -269,7 +269,6 @@ async function sendPreparedMessagesIndividually(preparedItems) {
 }
 
 export default function BulkIssue() {
-  const navigate = useNavigate();
   const input = useRef(null);
   const previewRef = useRef(null);
   const bulkPreviewRefs = useRef({});
@@ -287,10 +286,11 @@ export default function BulkIssue() {
   const [bulkIssued, setBulkIssued] = useState(false);
   const [issuedBulkRecords, setIssuedBulkRecords] = useState([]);
   const [singleEmailState, setSingleEmailState] = useState("idle");
-  const [singleRecipientEmail, setSingleRecipientEmail] = useState("");
   const [bulkEmailState, setBulkEmailState] = useState({ status: "idle", sent: 0, failed: 0, total: 0 });
   const [emailStatus, setEmailStatus] = useState({});
   const [zipBusy, setZipBusy] = useState(false);
+  const singleAutoEmailStartedRef = useRef(new Set());
+  const bulkAutoEmailStartedRef = useRef(new Set());
 
   useEffect(() => {
     try {
@@ -335,7 +335,6 @@ export default function BulkIssue() {
     setIssuedBulkRecords([]);
     setBulkIssued(false);
     setSingleEmailState("idle");
-    setSingleRecipientEmail("");
     setBulkEmailState({ status: "idle", sent: 0, failed: 0, total: 0 });
     setEmailStatus({});
     setMessage(
@@ -365,12 +364,7 @@ export default function BulkIssue() {
 
     const missingRequired = activeVariables
       .filter((variable) => variable.required)
-      .filter((variable) => {
-        const key = String(variable.key || "").trim().toLowerCase();
-        const type = String(variable.type || "").trim().toLowerCase();
-        // Email is entered after the certificate is issued, on the delivery section.
-        return key !== "email" && type !== "email" && String(form[variable.key] ?? "").trim() === "";
-      });
+      .filter((variable) => String(form[variable.key] ?? "").trim() === "");
 
     if (missingRequired.length > 0) {
       setMessage(
@@ -378,6 +372,16 @@ export default function BulkIssue() {
           .map((variable) => variable.label)
           .join(", ")}.`
       );
+      return;
+    }
+
+    const enteredEmail = valueForVariable(form, emailKey).trim();
+    if (!enteredEmail) {
+      setMessage("Enter the participant email address before issuing the certificate. New certificates are emailed automatically after issuance.");
+      return;
+    }
+    if (!isValidEmail(enteredEmail) || isPlaceholderEmail(enteredEmail)) {
+      setMessage("Enter a valid participant email address before issuing the certificate.");
       return;
     }
 
@@ -391,7 +395,7 @@ export default function BulkIssue() {
       templateName: selectedTemplate.name,
       template: selectedTemplate,
       data: { ...form },
-      email: valueForVariable(form, emailKey).trim(),
+      email: enteredEmail,
       issuedAt: new Date().toISOString(),
       status: "Issued",
       emailStatus: "Not sent",
@@ -408,11 +412,9 @@ export default function BulkIssue() {
       persistRecords([record]);
       void publishCertificateForPublicVerification(record);
       setGeneratedId(id);
-      setSingleRecipientEmail("");
-      setEmailStatus({ [id]: "Not sent" });
-      setSingleEmailState("idle");
-      setMessage(`Certificate ${id} was issued successfully. Opening email delivery…`);
-      navigate(`/email-certificate/${encodeURIComponent(id)}`);
+        setEmailStatus({ [id]: "Preparing…" });
+      setSingleEmailState("sending");
+      setMessage(`Certificate ${id} was issued successfully. Sending it to ${enteredEmail}…`);
     } catch (error) {
       setMessage(error?.message || "Unable to save the issued certificate.");
     }
@@ -432,59 +434,88 @@ export default function BulkIssue() {
     }
   };
 
-  const emailSingle = async () => {
-    if (!generatedId || !selectedTemplate) return;
-
-    const email = String(singleRecipientEmail || "").trim();
-    if (!email) {
+  const emailSingle = async (recordOverride = null) => {
+    const record = recordOverride || loadIssuedCertificates().find((item) => item.id === generatedId);
+    if (!record) return;
+    const email = String(record.email || valueForVariable(record.data, emailKey) || "").trim();
+    if (!isValidEmail(email) || isPlaceholderEmail(email)) {
+      updateRecordEmailStatus(record.id, "Failed", { emailError: "Invalid or missing email address." });
       setSingleEmailState("error");
-      setMessage("Enter the participant's email address before sending the certificate.");
+      setEmailStatus((current) => ({ ...current, [record.id]: "Failed" }));
+      setMessage(`Certificate ${record.id} was issued, but the participant email address is invalid.`);
       return;
     }
-    if (!isValidEmail(email)) {
-      setSingleEmailState("error");
-      setMessage("Enter a valid participant email address.");
-      return;
-    }
-
-    const record = {
-      id: generatedId,
-      templateId: selectedTemplate.id,
-      templateName: selectedTemplate.name,
-      template: selectedTemplate,
-      data: { ...form, [emailKey]: email },
-      email,
-      issuedAt: new Date().toISOString(),
-      status: "Issued",
-      emailStatus: emailStatus[generatedId] || "Not sent",
-      createdBy: getCurrentIssuer(),
-      createdByName: getSessionUser()?.name || "Authorized Institution",
-      immutable: true,
-    };
-
     try {
       setSingleEmailState("sending");
+      setEmailStatus((current) => ({ ...current, [record.id]: "Sending…" }));
+      const serverStatus = await getEmailServerStatus();
+      if (!serverStatus.configured || !serverStatus.connected) {
+        const reason = serverStatus.message || "Gmail is not connected.";
+        updateRecordEmailStatus(record.id, "Failed", { emailError: reason });
+        setSingleEmailState("error");
+        setEmailStatus((current) => ({ ...current, [record.id]: "Failed" }));
+        setMessage(`Certificate ${record.id} was issued, but the automatic email was not sent: ${reason}`);
+        return;
+      }
       const dataUrl = await captureCertificate(previewRef.current);
-      const verificationUrl = getVerificationUrl(generatedId);
+      const verificationUrl = getVerificationUrl(record.id);
       const result = await sendCertificateEmail({ record, dataUrl, verificationUrl });
-
       const sent = Boolean(result.sent);
-      const statusText = sent ? "Sent" : "Not sent — email service is not configured";
-      setSingleEmailState(sent ? "sent" : "demo");
-      setEmailStatus((current) => ({ ...current, [generatedId]: statusText }));
-      persistRecords([{ ...record, emailStatus: statusText, emailSentAt: sent ? new Date().toISOString() : null }]);
-      setMessage(
-        sent
-          ? `Certificate ${generatedId} was emailed to ${email}.`
-          : `Email was not sent because the backend is running in demo mode. Configure GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, GMAIL_REDIRECT_URI and GMAIL_REFRESH_TOKEN in the backend environment.`
-      );
+      updateRecordEmailStatus(record.id, sent ? "Sent" : "Failed", {
+        email,
+        emailSentAt: sent ? new Date().toISOString() : null,
+        emailError: sent ? null : (result.error || "Email service did not confirm delivery."),
+      });
+      appendHistorySafe(record.id, sent ? "Email sent automatically" : "Automatic email failed", { to: email, error: sent ? null : (result.error || null) });
+      addAuditLog(sent ? "Certificate email sent automatically" : "Automatic certificate email failed", { certificateId: record.id, to: email });
+      setEmailStatus((current) => ({ ...current, [record.id]: sent ? "Sent" : "Failed" }));
+      setSingleEmailState(sent ? "sent" : "error");
+      setMessage(sent ? `Certificate ${record.id} was issued and emailed to ${email}.` : `Certificate ${record.id} was issued, but the email failed.`);
     } catch (error) {
       console.error(error);
+      updateRecordEmailStatus(record.id, "Failed", { emailError: error.message || "Certificate email failed." });
+      appendHistorySafe(record.id, "Automatic email failed", { to: email, error: error.message || "Certificate email failed." });
+      addAuditLog("Automatic certificate email failed", { certificateId: record.id, to: email, error: error.message || "Certificate email failed." });
       setSingleEmailState("error");
-      setEmailStatus((current) => ({ ...current, [generatedId]: "Failed" }));
-      setMessage(error.message || "Certificate email failed.");
+      setEmailStatus((current) => ({ ...current, [record.id]: "Failed" }));
+      setMessage(`Certificate ${record.id} was issued, but the email failed: ${error.message || "Certificate email failed."}`);
     }
   };
+
+  const appendHistorySafe = (id, action, details = {}) => {
+    try {
+      const current = loadIssuedCertificates().find((item) => item.id === id);
+      if (!current) return;
+      const history = Array.isArray(current.history) ? current.history : [];
+      updateIssuedCertificate(id, { history: [...history, { action, at: new Date().toISOString(), ...details }] });
+    } catch {
+      // Supplemental audit history must never block email delivery.
+    }
+  };
+
+  const updateRecordEmailStatus = (recordId, statusText, extra = {}) => {
+    setEmailStatus((current) => ({ ...current, [recordId]: statusText }));
+    try {
+      updateIssuedCertificate(recordId, { emailStatus: statusText, ...extra });
+    } catch (error) {
+      console.error("Unable to persist certificate email status:", error);
+    }
+  };
+
+  useEffect(() => {
+    if (!generatedId || !selectedTemplate) return;
+    if (singleAutoEmailStartedRef.current.has(generatedId)) return;
+    singleAutoEmailStartedRef.current.add(generatedId);
+    let cancelled = false;
+    const timer = window.setTimeout(async () => {
+      if (cancelled) return;
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      if (cancelled) return;
+      const record = loadIssuedCertificates().find((item) => item.id === generatedId);
+      if (record) await emailSingle(record);
+    }, 300);
+    return () => { cancelled = true; window.clearTimeout(timer); };
+  }, [generatedId, selectedTemplateId]);
 
   const handleCsv = (file) => {
     if (!file) return;
@@ -654,19 +685,9 @@ export default function BulkIssue() {
       setEmailStatus(Object.fromEntries(issuedRecords.map((record) => [record.id, "Not sent"])));
       setBulkIssued(true);
       setBulkEmailState({ status: "idle", sent: 0, failed: 0, total: issuedRecords.length });
-      savePendingEmailBatch({
-        certificateIds: issuedRecords.map((record) => record.id),
-        templateName: selectedTemplate.name,
-      });
-
       setMessage(
-        `${issuedRecords.length} certificates were created successfully using "${selectedTemplate.name}". Opening Email Participants…`
+        `${issuedRecords.length} certificates were created successfully using "${selectedTemplate.name}". Automatic email delivery is starting now. Email status will be recorded for each certificate.`
       );
-
-      // Bulk issuance always proceeds to the dedicated Email Participants page.
-      // The certificates are already persisted, so this page can load the exact
-      // immutable issued records and prepare each participant's own attachment.
-      navigate("/email-participants");
     } catch (error) {
       console.error("Bulk certificate issuance failed:", error);
       setIssuedBulkRecords([]);
@@ -717,16 +738,6 @@ export default function BulkIssue() {
       ok: false,
       text: `${problems.slice(0, 2).join(", ")}${problems.length > 2 ? "…" : ""}`,
     };
-  };
-
-  const updateRecordEmailStatus = (recordId, statusText, extra = {}) => {
-    setEmailStatus((current) => ({ ...current, [recordId]: statusText }));
-    try {
-      updateIssuedCertificate(recordId, { emailStatus: statusText, ...extra });
-    } catch (error) {
-      console.error("Unable to persist certificate email status:", error);
-      setMessage(error?.message || "Unable to save the certificate email status.");
-    }
   };
 
   const sendBulkEmails = async (recordsToSend = issuedBulkRecords, isRetry = false) => {
@@ -852,6 +863,21 @@ export default function BulkIssue() {
     }
   };
 
+  useEffect(() => {
+    if (!bulkIssued || !issuedBulkRecords.length) return;
+    const batchKey = issuedBulkRecords.map((record) => record.id).join("|");
+    if (bulkAutoEmailStartedRef.current.has(batchKey)) return;
+    bulkAutoEmailStartedRef.current.add(batchKey);
+    let cancelled = false;
+    const timer = window.setTimeout(async () => {
+      if (cancelled) return;
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      if (cancelled) return;
+      await sendBulkEmails(issuedBulkRecords, false);
+    }, 350);
+    return () => { cancelled = true; window.clearTimeout(timer); };
+  }, [bulkIssued, issuedBulkRecords]);
+
   const downloadBulkZip = async () => {
     if (!issuedBulkRecords.length) return;
 
@@ -965,7 +991,7 @@ export default function BulkIssue() {
             <div>
               <div className="text-xs font-semibold uppercase tracking-wider text-blue-600">Certificate issuance</div>
               <h2 className="mt-1 text-2xl font-bold text-slate-900">Issue Certificate</h2>
-              <p className="mt-1 text-sm text-slate-500">Create one certificate manually or issue multiple certificates using a CSV file, email them to participants, and download the complete batch as a ZIP.</p>
+              <p className="mt-1 text-sm text-slate-500">Create a certificate and automatically email it to the participant. Bulk certificates are also emailed automatically after issuance.</p>
             </div>
 
             <div className="grid w-full max-w-xl grid-cols-2 gap-2 rounded-xl bg-slate-100 p-1">
@@ -1010,6 +1036,18 @@ export default function BulkIssue() {
                     />
                   </label>
                 ))}
+                {!emailVariable && (
+                  <label className="block text-sm">
+                    <span className="font-medium text-slate-600">Email Address <span className="ml-2 text-xs font-semibold text-rose-600">Required for automatic delivery</span></span>
+                    <input
+                      type="email"
+                      value={form.email || ""}
+                      onChange={(event) => updateField("email", event.target.value)}
+                      placeholder="participant@gmail.com"
+                      className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2.5 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                    />
+                  </label>
+                )}
               </div>
 
               <button type="button" onClick={generateSingle} disabled={!selectedTemplate} className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3.5 font-semibold text-white hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50">Issue single certificate <ArrowRight size={17} /></button>
@@ -1020,31 +1058,19 @@ export default function BulkIssue() {
                     <Mail size={18} className="mt-0.5 shrink-0 text-blue-600" />
                     <div className="min-w-0 flex-1">
                       <div className="text-sm font-bold text-slate-900">Certificate issued</div>
-                      <p className="mt-1 text-xs leading-5 text-slate-500">You will enter the participant email address on the next page to send this certificate as an attachment.</p>
-                      <input
-                        type="email"
-                        value={singleRecipientEmail}
-                        onChange={(event) => { setSingleRecipientEmail(event.target.value); setSingleEmailState("idle"); }}
-                        placeholder="participant@example.com"
-                        className="mt-3 w-full rounded-xl border border-blue-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                      />
-                      <button
-                        type="button"
-                        onClick={emailSingle}
-                        disabled={singleEmailState === "sending" || !singleRecipientEmail.trim()}
-                        className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3 font-semibold text-white hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        {singleEmailState === "sending" ? <Loader2 size={17} className="animate-spin" /> : <Send size={17} />}
-                        {singleEmailState === "sending" ? "Sending certificate…" : singleEmailState === "sent" ? "Certificate emailed" : "Send certificate by email"}
-                      </button>
-                      {singleEmailState === "sent" && (
-                        <div className="mt-2 text-xs font-semibold text-emerald-700">Sent to {singleRecipientEmail}</div>
+                      <p className="mt-1 text-xs leading-5 text-slate-500">The participant email was provided before issuance. CertiChain automatically sends the certificate after creation.</p>
+                      <div className={`mt-3 rounded-xl px-3 py-2.5 text-xs font-semibold ${emailStatus[generatedId] === "Sent" ? "bg-emerald-50 text-emerald-700" : emailStatus[generatedId] === "Failed" ? "bg-rose-50 text-rose-700" : "bg-white text-blue-700"}`}>
+                        Email status: {emailStatus[generatedId] || "Preparing…"}
+                      </div>
+                      {emailStatus[generatedId] === "Failed" && (
+                        <button type="button" onClick={() => emailSingle(loadIssuedCertificates().find((item) => item.id === generatedId))} disabled={singleEmailState === "sending"} className="mt-3 inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 disabled:opacity-50">
+                          <RefreshCcw size={15} /> Retry email
+                        </button>
                       )}
                     </div>
                   </div>
                 </div>
               )}
-
               <Link to="/templates/new" className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-600 hover:bg-slate-50"><FileText size={16} /> Edit certificate template</Link>
             </section>
 
@@ -1087,7 +1113,7 @@ export default function BulkIssue() {
               <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                 <div>
                   <h3 className="text-xl font-bold text-slate-900">Issue certificates in bulk</h3>
-                  <p className="mt-1 max-w-3xl text-sm text-slate-500">Upload one CSV with one participant per row. The CSV must contain an <strong>email</strong> column. Each row is used to create its own certificate. Email format and placeholder addresses are checked later when you send the certificates, so certificate issuance is not blocked by test email data.</p>
+                  <p className="mt-1 max-w-3xl text-sm text-slate-500">Upload one CSV with one participant per row. The CSV must contain an <strong>email</strong> column. Each row creates its own certificate, and CertiChain automatically emails each newly issued certificate to that row's recipient.</p>
                 </div>
                 <button type="button" onClick={downloadCsvTemplate} className="flex shrink-0 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"><Download size={16} /> Download CSV template</button>
               </div>
@@ -1111,7 +1137,7 @@ export default function BulkIssue() {
                     <h3 className="font-bold text-slate-900">CSV data preview</h3>
                     <p className="mt-1 text-sm text-slate-500">{rows.length} records loaded. The <strong>email</strong> column is used as the individual recipient address for each certificate.</p>
                   </div>
-                  <button type="button" onClick={issueBulk} className="flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white hover:bg-blue-500"><ArrowRight size={17} /> Issue bulk certificates</button>
+                  <button type="button" onClick={issueBulk} className="flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white hover:bg-blue-500"><ArrowRight size={17} /> Issue & email bulk certificates</button>
                 </div>
 
                 <div className="border-b border-slate-100 bg-slate-50 p-5 sm:p-6">
@@ -1134,6 +1160,16 @@ export default function BulkIssue() {
             )}
 
 
+          </div>
+        )}
+
+        {issuedBulkRecords.length > 0 && (
+          <div className="pointer-events-none fixed left-[-25000px] top-0 opacity-0" aria-hidden="true">
+            {issuedBulkRecords.map((record) => (
+              <div key={record.id} ref={(node) => { if (node) bulkPreviewRefs.current[record.id] = node; }} style={{ width: 1123 }}>
+                <TemplateCertificatePreview template={record.template} form={record.data || {}} certificateId={record.id} exportMode />
+              </div>
+            ))}
           </div>
         )}
       </div>

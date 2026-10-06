@@ -62,3 +62,11 @@ Never commit the Gmail client secret or refresh token to GitHub.
 
 ### Gmail OAuth scope
 The Gmail integration intentionally uses only `https://www.googleapis.com/auth/gmail.send`.
+
+## V91 Email workflow
+
+- New single certificates require the participant email before issuance and are automatically emailed immediately after the immutable certificate is saved.
+- New bulk certificates require the CSV `email` column and are automatically emailed immediately after issuance.
+- Existing/old certificates are never emailed automatically as a side effect of issuing new certificates.
+- To email an old certificate, open **Issued Certificates**, select one or more records, click **Email selected**, review the email template, and click **Send selected certificates**.
+- Failed automatic deliveries remain in the immutable registry with their delivery status and can be selected later for retry.
