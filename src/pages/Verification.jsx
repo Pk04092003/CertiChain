@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { ArrowLeft, Ban, CheckCircle2, Copy, Search, ShieldCheck, XCircle, AlertTriangle, Clock3, Hash, Blocks, UserRound, GraduationCap, Building2, CalendarDays, Link2, FileKey2, Wallet, ShieldAlert, Fingerprint, History, QrCode, Check, X } from "lucide-react";
+import { ArrowLeft, Ban, CheckCircle2, Copy, Search, ShieldCheck, XCircle, AlertTriangle, Clock3, Hash, Blocks, UserRound, GraduationCap, Building2, CalendarDays, FileKey2, ShieldAlert, Fingerprint, History, QrCode, Check, X } from "lucide-react";
 import { getPublicAppUrl, isLocalVerificationUrl, verifyCertificatePublicly } from "../verificationUrl";
 
 function formatDate(value) {
@@ -49,12 +49,12 @@ const STATES = {
 
 function Detail({ icon: Icon, label, value, wide = false, mono = false }) {
   return (
-    <div className={`rounded-2xl border border-slate-200 bg-white p-4 ${wide ? "sm:col-span-2" : ""}`}>
+    <div className={`min-w-0 rounded-2xl border border-slate-200 bg-white p-3 sm:p-4 ${wide ? "sm:col-span-2" : ""}`}>
       <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
         <Icon size={15} />
         {label}
       </div>
-      <div className={`mt-2 break-words font-semibold text-slate-900 ${mono ? "font-mono text-sm" : ""}`}>
+      <div className={`mt-2 min-w-0 break-words [overflow-wrap:anywhere] font-semibold text-slate-900 ${mono ? "font-mono text-sm" : ""}`}>
         {value || "—"}
       </div>
     </div>
@@ -76,13 +76,6 @@ function Timeline({ items = [] }) {
             <div className="font-semibold text-slate-900">{item.action || "Certificate event"}</div>
             <div className="mt-1 text-xs text-slate-500">{formatDate(item.at)}</div>
             {item.reason && <div className="mt-2 text-sm text-slate-600">Reason: {item.reason}</div>}
-            {(item.transactionHash || item.blockNumber || item.ipfsCid) && (
-              <div className="mt-3 grid gap-2 text-xs text-slate-500 sm:grid-cols-2">
-                {item.transactionHash && <div><span className="font-semibold">Transaction:</span> <span className="font-mono break-all">{item.transactionHash}</span></div>}
-                {item.blockNumber && <div><span className="font-semibold">Block:</span> {item.blockNumber}</div>}
-                {item.ipfsCid && <div className="sm:col-span-2"><span className="font-semibold">IPFS:</span> <span className="font-mono break-all">{item.ipfsCid}</span></div>}
-              </div>
-            )}
           </div>
         </div>
       ))}
@@ -128,16 +121,16 @@ export default function Verification() {
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
       <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-5 py-5">
-          <Link to="/" className="flex items-center gap-3">
+        <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-3 py-4 sm:px-5 sm:py-5">
+          <Link to="/" className="flex min-w-0 items-center gap-2 sm:gap-3">
             <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600 text-white"><ShieldCheck size={21} /></span>
             <span><b className="block text-sm">CertiChain</b><small className="text-xs text-slate-400">Public Certificate Verification</small></span>
           </Link>
-          <Link to="/verify" className="flex items-center gap-2 text-sm text-slate-500"><ArrowLeft size={16} /> Verify another</Link>
+          <Link to="/verify" className="shrink-0 flex items-center gap-1.5 text-xs text-slate-500 sm:gap-2 sm:text-sm"><ArrowLeft size={16} /> Verify another</Link>
         </div>
       </header>
 
-      <main className="mx-auto max-w-4xl px-5 py-8 sm:py-10">
+      <main className="mx-auto w-full max-w-4xl px-3 py-6 sm:px-5 sm:py-10">
         {publicUrlIsLocal && (
           <div className="mb-5 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
             QR testing note: this portal is using <span className="font-mono">{getPublicAppUrl()}</span>. Use the deployed HTTPS portal for phone-camera or Google Lens verification.
@@ -164,7 +157,7 @@ export default function Verification() {
         {!loading && result?.ok && certificate && (
           <div className="space-y-5">
             {/* QR verification result: intentionally no certificate preview or status seal. */}
-            <section className={`rounded-3xl border p-6 shadow-sm sm:p-8 ${config?.shell || "border-slate-200 bg-white"}`}>
+            <section className={`rounded-3xl border p-4 shadow-sm sm:p-8 ${config?.shell || "border-slate-200 bg-white"}`}>
               <div className="flex flex-col items-center text-center">
                 <div className={`flex h-20 w-20 items-center justify-center rounded-full shadow-sm ${config?.iconShell || "bg-slate-600 text-white"}`}>
                   <Icon size={40} strokeWidth={2.4} />
@@ -172,7 +165,7 @@ export default function Verification() {
                 <div className={`mt-5 inline-flex items-center rounded-full border px-5 py-2 text-sm font-black tracking-[0.16em] ${config?.badge || "border-slate-200 bg-slate-100 text-slate-700"}`}>
                   {config?.label || state}
                 </div>
-                <h1 className="mt-4 text-3xl font-bold sm:text-4xl">{config?.title || "Certificate Verification"}</h1>
+                <h1 className="mt-4 text-2xl font-bold sm:text-4xl">{config?.title || "Certificate Verification"}</h1>
                 <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600">{config?.message || "The certificate verification result is shown below."}</p>
                 <div className="mt-5 inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 font-mono text-sm shadow-sm">
                   <Hash size={15} className="text-slate-400" /> {certificate.id}
@@ -182,10 +175,10 @@ export default function Verification() {
             </section>
 
             {/* Full public certificate details. Email is intentionally omitted because public verification must not expose participant email. */}
-            <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+            <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-8">
               <div className="border-b border-slate-100 pb-5">
                 <div className="text-xs font-semibold uppercase tracking-wider text-slate-400">Certificate details</div>
-                <h2 className="mt-1 text-2xl font-bold">Complete verification information</h2>
+                <h2 className="mt-1 text-xl font-bold sm:text-2xl">Complete verification information</h2>
                 <p className="mt-2 text-sm text-slate-500">All publicly available certificate and verification details are shown below.</p>
               </div>
 
@@ -196,12 +189,6 @@ export default function Verification() {
                 <Detail icon={FileKey2} label="Template" value={certificate.templateName} />
                 <Detail icon={CalendarDays} label="Issued date" value={formatDate(certificate.issuedAt)} />
                 <Detail icon={Building2} label="Issued by" value={certificate.createdByName} />
-                <Detail icon={Blocks} label="Blockchain network" value={certificate.blockchainNetwork || "Ethereum Sepolia"} />
-                <Detail icon={CheckCircle2} label="Blockchain status" value={certificate.blockchainStatus || "Not registered"} />
-                <Detail icon={Link2} label="Transaction hash" value={certificate.transactionHash} mono wide />
-                <Detail icon={Hash} label="Block number" value={certificate.blockNumber} mono />
-                <Detail icon={FileKey2} label="Certificate hash" value={certificate.certificateHash} mono />
-                <Detail icon={Link2} label="IPFS CID" value={certificate.ipfsCid} mono wide />
               </div>
 
               {certificate.publicFields && Object.keys(certificate.publicFields).length > 0 && (
@@ -216,10 +203,6 @@ export default function Verification() {
                 </div>
               )}
 
-              <div className="mt-5 grid gap-4 sm:grid-cols-2">
-                <Detail icon={Wallet} label="Issuer wallet" value={certificate.issuerAddress || certificate.blockchainIssuer} mono />
-                <Detail icon={Link2} label="Smart contract" value={certificate.contractAddress} mono />
-              </div>
 
               {state === "DISQUALIFIED" && certificate.disqualificationReason && (
                 <div className="mt-5 rounded-2xl border border-rose-100 bg-rose-50 p-5 text-sm text-rose-800">
@@ -238,7 +221,7 @@ export default function Verification() {
               )}
             </section>
 
-            <section className={`rounded-3xl border p-6 sm:p-8 ${integrity?.matched ? "border-emerald-200 bg-emerald-50" : integrity?.available ? "border-rose-200 bg-rose-50" : "border-slate-200 bg-white"}`}>
+            <section className={`rounded-3xl border p-4 sm:p-8 ${integrity?.matched ? "border-emerald-200 bg-emerald-50" : integrity?.available ? "border-rose-200 bg-rose-50" : "border-slate-200 bg-white"}`}>
               <div className="flex items-start gap-4">
                 <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${integrity?.matched ? "bg-emerald-600 text-white" : integrity?.available ? "bg-rose-600 text-white" : "bg-slate-200 text-slate-700"}`}>
                   {integrity?.matched ? <Fingerprint size={22} /> : integrity?.available ? <ShieldAlert size={22} /> : <Hash size={22} />}
@@ -264,7 +247,7 @@ export default function Verification() {
               )}
             </section>
 
-            <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+            <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-8">
               <div className="flex items-start gap-3">
                 <History className="mt-0.5 shrink-0 text-blue-700" size={21} />
                 <div>
@@ -275,7 +258,7 @@ export default function Verification() {
               <div className="mt-6"><Timeline items={timeline} /></div>
             </section>
 
-            <section className="rounded-3xl border border-indigo-100 bg-indigo-50 p-6 shadow-sm sm:p-8">
+            <section className="rounded-3xl border border-indigo-100 bg-indigo-50 p-4 shadow-sm sm:p-8">
               <div className="flex items-start gap-3">
                 <QrCode className="mt-0.5 shrink-0 text-indigo-700" size={21} />
                 <div>
@@ -285,7 +268,7 @@ export default function Verification() {
               </div>
             </section>
 
-            <section className="rounded-3xl border border-blue-100 bg-blue-50 p-6 sm:p-8">
+            <section className="rounded-3xl border border-blue-100 bg-blue-50 p-4 sm:p-8">
               <div className="flex items-start gap-3">
                 <Clock3 className="mt-0.5 shrink-0 text-blue-700" size={20} />
                 <div>
