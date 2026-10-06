@@ -83,3 +83,16 @@ Resend shared test sender `onboarding@resend.dev` is for testing and cannot deli
 
 ## Vercel SPA routing
 For the Vercel project, set Root Directory to `OneDrive/Desktop/Capstone/Praveen/CertiChain_Blockchain_Project_FIXED` (the directory containing the workspace `package.json`). Use `npm run build` and `frontend/dist`. `cleanUrls` is disabled so React Router routes such as `/email-participants` and `/verify/<certificateId>` are rewritten to `index.html`.
+
+
+## Vercel frontend deployment (V82)
+
+Recommended Vercel Root Directory: `OneDrive/Desktop/Capstone/Praveen/CertiChain_Blockchain_Project_FIXED/frontend`
+Framework: Vite
+Build Command: `npm run build`
+Output Directory: `dist`
+Install Command: `npm install`
+
+Do not set `npm start` as the Output Directory. `npm start` is only for the Render backend.
+
+If Vercel previously showed a very fast `Build Completed in /vercel/output` without `npm install` and `vite build`, remove the old Production Override values or set them to the values above, then redeploy the latest `master` commit.
