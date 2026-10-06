@@ -58,3 +58,7 @@ MONGODB_URI=...
 ```
 
 Never commit the Gmail client secret or refresh token to GitHub.
+
+
+### Gmail OAuth scope
+The Gmail integration intentionally uses only `https://www.googleapis.com/auth/gmail.send`.

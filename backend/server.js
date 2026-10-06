@@ -194,11 +194,20 @@ function gmailClientFromConfig() {
   return client;
 }
 
-async function gmailProfile() {
+async function gmailAuthorizationInfo() {
   const auth = gmailClientFromConfig();
   if (!auth) return null;
-  const gmail = google.gmail({ version: 'v1', auth });
-  return (await gmail.users.getProfile({ userId: 'me' })).data;
+  const accessTokenResult = await auth.getAccessToken();
+  const accessToken = String(accessTokenResult?.token || accessTokenResult || '').trim();
+  if (!accessToken) throw new Error('Google did not return an access token from the stored refresh token.');
+  const info = await auth.getTokenInfo(accessToken);
+  const scopes = Array.isArray(info?.scopes) ? info.scopes : [];
+  return {
+    scopes,
+    hasGmailSendScope: scopes.includes(GMAIL_SCOPE),
+    email: String(info?.email || '').trim() || null,
+    expiryDate: info?.expiry_date || null,
+  };
 }
 
 function sanitizeHeader(value) {
@@ -248,10 +257,13 @@ function buildGmailRawMessage(message, senderEmail, fromName='CertiChain') {
 async function sendGmailMessage(message, maxAttempts=3) {
   const config = readEmailConfig();
   if (!config.connected) { const e = new Error('Gmail is not connected. Configure Google OAuth, authorize the sender account, and add GMAIL_REFRESH_TOKEN to Render.'); e.code='GMAIL_NOT_CONNECTED'; e.statusCode=503; throw e; }
-  const profile = await gmailProfile();
-  const sender = config.senderEmail || String(profile?.emailAddress || '').trim();
-  if (!sender) { const e = new Error('Unable to determine the authorized Gmail sender address.'); e.statusCode=500; throw e; }
-  const gmail = google.gmail({ version:'v1', auth:gmailClientFromConfig() });
+  const auth = gmailClientFromConfig();
+  if (!auth) { const e = new Error('Gmail is not connected.'); e.statusCode = 503; throw e; }
+  const sender = config.senderEmail;
+  if (!sender) { const e = new Error('Set GMAIL_SENDER_EMAIL in Render to the Gmail account that granted gmail.send access.'); e.statusCode=500; throw e; }
+  const authInfo = await gmailAuthorizationInfo();
+  if (!authInfo?.hasGmailSendScope) { const e = new Error(`Stored Gmail authorization does not include ${GMAIL_SCOPE}. Reconnect Gmail and grant Send email permission, then replace GMAIL_REFRESH_TOKEN in Render.`); e.code='GMAIL_SCOPE_MISSING'; e.statusCode=403; throw e; }
+  const gmail = google.gmail({ version:'v1', auth });
   const raw = buildGmailRawMessage(message, sender, config.fromName);
   let lastError;
   for (let attempt=1; attempt<=maxAttempts; attempt++) {
@@ -274,14 +286,20 @@ function filenameFallback(filename) {
 
 app.get('/api/email/status', async (_, res) => {
   const config = readEmailConfig();
-  let profile = null, connected = false, error = null;
+  let connected = false, error = null, scopeGranted = false;
   if (config.connected) {
-    try { profile = await gmailProfile(); connected = Boolean(profile?.emailAddress); }
-    catch (e) { error = normalizeGmailError(e).message; }
+    try {
+      const info = await gmailAuthorizationInfo();
+      scopeGranted = Boolean(info?.hasGmailSendScope);
+      connected = scopeGranted;
+      if (!scopeGranted) error = `Stored Gmail authorization is missing the Gmail send scope (${GMAIL_SCOPE}).`;
+    } catch (e) {
+      error = normalizeGmailError(e).message;
+    }
   }
   res.json({
     configured: config.configured, connected, provider:'Gmail API',
-    from: profile?.emailAddress || config.senderEmail || null,
+    from: config.senderEmail || null,
     authUrl: !connected ? '/api/email/google/auth' : null,
     message: !config.configured
       ? 'Gmail API is not configured. Add GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET and GMAIL_REDIRECT_URI to Render.'
@@ -311,8 +329,13 @@ app.get('/api/email/google/callback', async (req,res) => {
     const refreshToken = String(tokens?.refresh_token || '').trim();
     if (!refreshToken) return res.status(400).send('<h2>No refresh token returned</h2><p>Google did not return a refresh token. Start the connection again with offline access and consent.</p>');
     client.setCredentials(tokens);
-    const profile = await google.gmail({version:'v1',auth:client}).users.getProfile({userId:'me'});
-    const sender = String(profile.data?.emailAddress || '').trim();
+    const accessToken = String(tokens?.access_token || '').trim();
+    const tokenInfo = accessToken ? await client.getTokenInfo(accessToken) : null;
+    const grantedScopes = Array.isArray(tokenInfo?.scopes) ? tokenInfo.scopes : String(tokens?.scope || '').split(/\s+/).filter(Boolean);
+    if (!grantedScopes.includes(GMAIL_SCOPE)) {
+      return res.status(403).send(`<h2>Gmail authorization is missing the Send scope</h2><p>This OAuth grant did not include <code>${GMAIL_SCOPE}</code>.</p><p>In Google Cloud, add the Gmail Send scope to your app's Data Access, then start a fresh connection and click Allow.</p>`);
+    }
+    const sender = String(process.env.GMAIL_SENDER_EMAIL || tokenInfo?.email || '').trim();
     const tokenForCopy = refreshToken.replace(/[<>&]/g,'');
     const frontend = String(process.env.FRONTEND_URL || '').trim().replace(/\/$/,'');
     return res.type('html').send(`<!doctype html><html><head><meta charset="utf-8"><title>CertiChain Gmail Connected</title><style>
@@ -393,7 +416,9 @@ app.listen(port, '0.0.0.0', async () => {
   if (config.connected) {
     try {
       const profile = await gmailProfile();
-      console.log(`Gmail API connected. Sender: ${profile?.emailAddress || config.senderEmail || 'unknown'}`);
+      const info = await gmailAuthorizationInfo();
+      if (info?.hasGmailSendScope) console.log(`Gmail API connected. Sender: ${config.senderEmail || info.email || 'configured sender'}`);
+      else console.error('Gmail refresh token is missing the gmail.send scope.');
     } catch (error) {
       console.error(`Gmail refresh token is not usable: ${normalizeGmailError(error).message}`);
     }

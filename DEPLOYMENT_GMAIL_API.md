@@ -90,3 +90,8 @@ Before pushing, make sure these are absent from tracked files:
 
 ### OAuth state fix
 This version uses a signed HttpOnly OAuth-state cookie instead of an in-memory state Map. This is important on Render because service restarts/redeploys can discard in-memory state. Start a fresh authorization at `/api/email/google/auth`; do not reuse an old callback URL.
+
+
+## Important Gmail scope fix
+
+CertiChain uses only `https://www.googleapis.com/auth/gmail.send`. The callback and connection-status checks no longer call the Gmail profile endpoint, because that endpoint requires broader Gmail permissions. The sender is taken from `GMAIL_SENDER_EMAIL`, and the backend validates that the stored OAuth token includes the Gmail Send scope. In Google Cloud Console, ensure the OAuth app's Data Access includes the Gmail Send scope. After a scope change, start a fresh connection from `/api/email/google/auth` and replace `GMAIL_REFRESH_TOKEN` in Render with the newly returned token.
