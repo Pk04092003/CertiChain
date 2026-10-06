@@ -2,7 +2,7 @@ services:
   - type: web
     name: certichain-backend
     runtime: node
-    rootDir: OneDrive/Desktop/Capstone/Praveen/CertiChain_Blockchain_Project_FIXED/backend
+    rootDir: backend
     buildCommand: npm install
     startCommand: npm start
     autoDeploy: true

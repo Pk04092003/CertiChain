@@ -9,7 +9,7 @@ import { ArrowLeft, CheckCircle2, Download, Loader2, Mail, QrCode, Send, ShieldC
 import { captureCertificatePng, certificatePngToPdf, downloadBlob, downloadDataUrl } from "../certificateExport";
 import { getVerificationUrl } from "../verificationUrl";
 
-const API_BASE_URL = (import.meta.env.VITE_API_URL || "https://certichain-xczm.onrender.com").replace(/\/$/, "");
+const API_BASE_URL = (import.meta.env.VITE_API_URL || "https://certichain-1-xc8l.onrender.com").replace(/\/$/, "");
 function valueForVariable(data, key) { const exact=data?.[key]; if(exact!==undefined&&exact!==null)return String(exact); const found=Object.entries(data||{}).find(([k])=>String(k).toLowerCase()===String(key).toLowerCase()); return found?String(found[1]??""):""; }
 function isValidEmail(email){return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email||"").trim())}
 function escapeHtml(value){return String(value??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;")}

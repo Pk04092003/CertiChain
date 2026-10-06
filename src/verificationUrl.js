@@ -21,7 +21,7 @@ export function isLocalVerificationUrl(url = getPublicAppUrl()) {
 }
 
 export function apiBaseUrl() {
-  return trimSlash(import.meta.env.VITE_API_URL || "https://certichain-xczm.onrender.com");
+  return trimSlash(import.meta.env.VITE_API_URL || "https://certichain-1-xc8l.onrender.com");
 }
 
 export async function publishCertificateForPublicVerification(record) {

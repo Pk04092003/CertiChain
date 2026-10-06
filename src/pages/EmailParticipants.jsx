@@ -11,7 +11,7 @@ import { clearPendingEmailBatch, loadPendingEmailBatch } from "../emailBatchStor
 import { loadInstitutionSettings, renderEmailTemplate } from "../institutionStore";
 import { getVerificationUrl } from "../verificationUrl";
 
-const API = (import.meta.env.VITE_API_URL || "https://certichain-xczm.onrender.com").replace(/\/$/, "");
+const API = (import.meta.env.VITE_API_URL || "https://certichain-1-xc8l.onrender.com").replace(/\/$/, "");
 function v(data,key){const exact=data?.[key];if(exact!==undefined&&exact!==null)return String(exact);const f=Object.entries(data||{}).find(([k])=>String(k).toLowerCase()===String(key).toLowerCase());return f?String(f[1]??""):""}
 function nameOf(r){return v(r?.data,"name")||v(r?.data,"student_name")||v(r?.data,"recipient_name")||"Participant"}
 function courseOf(r){return v(r?.data,"course")||r?.templateName||"Certificate"}

@@ -17,7 +17,7 @@ Never commit `.env` files containing secrets.
 
 
 ## Production deployment
-The frontend uses `https://certichain-xczm.onrender.com` as its safe fallback API URL. For your Vercel Production deployment, set `VITE_API_URL` to that Render URL and redeploy so the browser calls the Render backend instead of localhost.
+The frontend uses `https://certichain-1-xc8l.onrender.com` as its safe fallback API URL. For your Vercel Production deployment, keep `VITE_API_URL=https://certichain-1-xc8l.onrender.com` so the browser calls the current Render backend.
 
 
 ## Gmail API email delivery

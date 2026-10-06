@@ -31,7 +31,7 @@ import { getVerificationUrl, publishCertificateForPublicVerification } from "../
 
 const EMAIL_KEY_FALLBACK = "email";
 
-const API_BASE_URL = (import.meta.env.VITE_API_URL || "https://certichain-xczm.onrender.com").replace(/\/$/, "");
+const API_BASE_URL = (import.meta.env.VITE_API_URL || "https://certichain-1-xc8l.onrender.com").replace(/\/$/, "");
 
 function makeId(name, course) {
   return getNextCertificateNumber();
