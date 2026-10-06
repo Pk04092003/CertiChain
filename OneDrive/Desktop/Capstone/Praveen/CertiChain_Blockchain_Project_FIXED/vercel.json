@@ -1,78 +1,27 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "npm run build",
+  "buildCommand": "cd frontend && npm install && npm run build",
   "outputDirectory": "frontend/dist",
   "installCommand": "npm install",
   "cleanUrls": false,
   "trailingSlash": false,
   "rewrites": [
-    {
-      "source": "/dashboard",
-      "destination": "/index.html"
-    },
-    {
-      "source": "/templates",
-      "destination": "/index.html"
-    },
-    {
-      "source": "/templates/new",
-      "destination": "/index.html"
-    },
-    {
-      "source": "/templates/:id/edit",
-      "destination": "/index.html"
-    },
-    {
-      "source": "/issue-certificate",
-      "destination": "/index.html"
-    },
-    {
-      "source": "/email-participants",
-      "destination": "/index.html"
-    },
-    {
-      "source": "/email-certificate/:id",
-      "destination": "/index.html"
-    },
-    {
-      "source": "/bulk-issue",
-      "destination": "/index.html"
-    },
-    {
-      "source": "/generate",
-      "destination": "/index.html"
-    },
-    {
-      "source": "/certificates",
-      "destination": "/index.html"
-    },
-    {
-      "source": "/certificates/:id",
-      "destination": "/index.html"
-    },
-    {
-      "source": "/analytics",
-      "destination": "/index.html"
-    },
-    {
-      "source": "/audit-logs",
-      "destination": "/index.html"
-    },
-    {
-      "source": "/verify",
-      "destination": "/index.html"
-    },
-    {
-      "source": "/verify/:certificateId",
-      "destination": "/index.html"
-    },
-    {
-      "source": "/settings",
-      "destination": "/index.html"
-    },
-    {
-      "source": "/login",
-      "destination": "/index.html"
-    }
+    { "source": "/dashboard", "destination": "/index.html" },
+    { "source": "/templates", "destination": "/index.html" },
+    { "source": "/templates/new", "destination": "/index.html" },
+    { "source": "/templates/:id/edit", "destination": "/index.html" },
+    { "source": "/issue-certificate", "destination": "/index.html" },
+    { "source": "/email-participants", "destination": "/index.html" },
+    { "source": "/email-certificate/:id", "destination": "/index.html" },
+    { "source": "/bulk-issue", "destination": "/index.html" },
+    { "source": "/generate", "destination": "/index.html" },
+    { "source": "/certificates", "destination": "/index.html" },
+    { "source": "/certificates/:id", "destination": "/index.html" },
+    { "source": "/analytics", "destination": "/index.html" },
+    { "source": "/audit-logs", "destination": "/index.html" },
+    { "source": "/verify", "destination": "/index.html" },
+    { "source": "/verify/:certificateId", "destination": "/index.html" },
+    { "source": "/settings", "destination": "/index.html" },
+    { "source": "/login", "destination": "/index.html" }
   ]
 }
