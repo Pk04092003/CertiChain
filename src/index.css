@@ -64,6 +64,7 @@ canvas { display: block; }
 .cc-status-seal-verified { border-color: #10b981; color: #047857; }
 .cc-status-seal-disqualified { border-color: #ef4444; color: #b91c1c; }
 .cc-status-seal-revoked { border-color: #f59e0b; color: #b45309; }
+.cc-status-seal-unregistered { border-color: #f59e0b; color: #b45309; }
 @media (max-width: 640px) {
   .cc-status-seal { width: 116px; height: 116px; border-width: 4px; }
 }

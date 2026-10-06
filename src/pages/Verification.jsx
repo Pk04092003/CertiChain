@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { ArrowLeft, Ban, CheckCircle2, Copy, ExternalLink, Search, ShieldCheck, XCircle, AlertTriangle } from "lucide-react";
-import { getPublicAppUrl, isLocalVerificationUrl, verifyCertificatePublicly } from "../verificationUrl";
+import { apiBaseUrl, getPublicAppUrl, isLocalVerificationUrl, verifyCertificatePublicly } from "../verificationUrl";
 
 function formatDate(value) {
   const date = new Date(value || "");
@@ -69,6 +69,11 @@ export default function Verification() {
   const config = STATES[state];
   const Icon = config?.icon || XCircle;
   const publicUrlIsLocal = isLocalVerificationUrl();
+  // Use the CertiChain backend as a same-origin PDF proxy. Directly embedding
+  // ipfs.io can be blocked by gateway framing/security headers on mobile.
+  const documentViewerUrl = certificate?.ipfsCid
+    ? `${apiBaseUrl()}/api/public/certificates/${encodeURIComponent(certificate.id || id)}/document`
+    : (certificate?.documentUrl || null);
 
   const copyId = async () => {
     try { await navigator.clipboard?.writeText(id); } catch {}
@@ -129,7 +134,7 @@ export default function Verification() {
               </div>
             </section>
 
-            {certificate.documentUrl && (
+            {documentViewerUrl && (
               <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
                 <div className="mb-4 flex flex-wrap items-center justify-between gap-3 px-1">
                   <div>
@@ -142,8 +147,8 @@ export default function Verification() {
                   </span>
                 </div>
                 <div className="relative mx-auto aspect-[1.414/1] w-full max-w-5xl overflow-hidden rounded-2xl border border-slate-200 bg-slate-100 shadow-inner">
-                  <iframe title={`${certificate.id} certificate`} src={certificate.documentUrl} className="h-full w-full bg-white" />
-                  <div className={`cc-status-seal pointer-events-none right-[7%] top-[8%] ${state === "VERIFIED" ? "cc-status-seal-verified" : state === "DISQUALIFIED" ? "cc-status-seal-disqualified" : "cc-status-seal-revoked"}`}>
+                  <iframe title={`${certificate.id} certificate`} src={documentViewerUrl} className="h-full w-full bg-white" />
+                  <div className={`cc-status-seal pointer-events-none right-[7%] top-[8%] ${state === "VERIFIED" ? "cc-status-seal-verified" : state === "DISQUALIFIED" ? "cc-status-seal-disqualified" : state === "REVOKED" ? "cc-status-seal-revoked" : "cc-status-seal-unregistered"}`}>
                     <Icon size={29} strokeWidth={2.4} />
                     <strong className="relative z-10 mt-1 text-[15px] font-black tracking-[0.14em]">{config?.label || state}</strong>
                     <span className="relative z-10 mt-0.5 text-[8px] font-bold uppercase tracking-[0.18em]">CertiChain Status</span>
@@ -183,8 +188,8 @@ export default function Verification() {
               )}
 
               <div className="mt-6 flex flex-wrap gap-3">
-                {certificate.documentUrl && (
-                  <a href={certificate.documentUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white"><ExternalLink size={16} /> Open Verified Certificate</a>
+                {documentViewerUrl && (
+                  <a href={documentViewerUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white"><ExternalLink size={16} /> Open Verified Certificate</a>
                 )}
                 <Link to="/verify" className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-5 py-3 text-sm font-semibold"><Search size={16} /> Verify another</Link>
               </div>
