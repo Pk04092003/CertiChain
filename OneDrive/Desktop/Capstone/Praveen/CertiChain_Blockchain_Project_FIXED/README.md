@@ -96,3 +96,6 @@ Install Command: `npm install`
 Do not set `npm start` as the Output Directory. `npm start` is only for the Render backend.
 
 If Vercel previously showed a very fast `Build Completed in /vercel/output` without `npm install` and `vite build`, remove the old Production Override values or set them to the values above, then redeploy the latest `master` commit.
+
+## V84 deployment
+The repository root is a self-contained Vite frontend for Vercel. Use Vercel Root Directory `./`, Framework `Vite`, Build Command `npm run build`, Output Directory `dist`, and Install Command `npm install`. The backend remains in `backend/` for Render.
