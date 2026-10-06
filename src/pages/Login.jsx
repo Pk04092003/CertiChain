@@ -9,14 +9,19 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
 
-  const submit = (event) => {
+  const [busy, setBusy] = useState(false);
+
+  const submit = async (event) => {
     event.preventDefault();
     setError("");
+    setBusy(true);
     try {
-      login(email, password);
+      await login(email, password);
       navigate("/dashboard");
     } catch (err) {
       setError(err?.message || "Unable to sign in.");
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -93,8 +98,8 @@ export default function Login() {
               </div>
             )}
 
-            <button className="mt-6 flex w-full items-center justify-center rounded-xl bg-blue-600 px-5 py-3.5 font-semibold text-white hover:bg-blue-500">
-              Sign in as Admin
+            <button disabled={busy} className="mt-6 flex w-full items-center justify-center rounded-xl bg-blue-600 px-5 py-3.5 font-semibold text-white hover:bg-blue-500 disabled:opacity-60">
+              {busy ? "Signing in…" : "Sign in as Admin"}
             </button>
 
             <Link
@@ -105,8 +110,8 @@ export default function Login() {
             </Link>
 
             <div className="mt-6 rounded-xl bg-slate-50 p-4 text-xs text-slate-500">
-              <b className="text-slate-700">Local demo admin</b>
-              <div className="mt-2">admin@certichain.local / admin123</div>
+              <b className="text-slate-700">Administrator access</b>
+              <div className="mt-2">Use the administrator email and password configured in the Render Environment Variables.</div>
             </div>
 
             <Link to="/" className="mt-5 block text-center text-sm font-semibold text-blue-600">

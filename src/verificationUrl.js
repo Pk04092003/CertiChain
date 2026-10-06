@@ -1,3 +1,5 @@
+import { authHeaders } from "./authStore";
+
 const trimSlash = (value) => String(value || "").trim().replace(/\/+$/, "");
 
 export function getPublicAppUrl() {
@@ -8,7 +10,7 @@ export function getPublicAppUrl() {
 }
 
 export function getVerificationUrl(certificateId) {
-  return `${getPublicAppUrl()}/verify/${encodeURIComponent(String(certificateId || ""))}`;
+  return `${getPublicAppUrl()}/verify/${encodeURIComponent(String(certificateId || "").trim().toUpperCase())}`;
 }
 
 export function isLocalVerificationUrl(url = getPublicAppUrl()) {
@@ -24,9 +26,8 @@ export function apiBaseUrl() {
   return trimSlash(import.meta.env.VITE_API_URL || "https://certichain-1-xc8l.onrender.com");
 }
 
-export async function publishCertificateForPublicVerification(record) {
-  if (!record?.id) return { ok: false, skipped: true };
-  const payload = {
+function buildPublicPayload(record) {
+  return {
     id: String(record.id),
     name: String(record?.data?.name || record?.data?.student_name || record?.data?.recipient_name || "Participant"),
     email: String(record?.email || record?.data?.email || ""),
@@ -50,80 +51,94 @@ export async function publishCertificateForPublicVerification(record) {
     disqualifiedAt: record.disqualifiedAt || null,
     certificateHash: record.documentHash || null,
   };
-  for (let attempt = 0; attempt < 2; attempt += 1) {
-    try {
-      const controller = new AbortController();
-      const timer = window.setTimeout(() => controller.abort(), 8000);
-      const response = await fetch(`${apiBaseUrl()}/api/public/certificates`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-        signal: controller.signal,
-      });
-      window.clearTimeout(timer);
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data?.error || "Unable to publish certificate for public verification.");
-      return { ok: true, ...data };
-    } catch (error) {
-      if (attempt === 1) return { ok: false, error: error?.name === "AbortError" ? "Public verification server timed out." : (error?.message || "Public verification sync failed.") };
-      await new Promise((resolve) => window.setTimeout(resolve, 1200));
-    }
+}
+
+async function apiJson(pathname, options = {}) {
+  const response = await fetch(`${apiBaseUrl()}${pathname}`, options);
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const error = new Error(data?.error || `CertiChain backend returned HTTP ${response.status}.`);
+    error.status = response.status;
+    error.code = data?.errorCode || data?.code || null;
+    throw error;
   }
-  return { ok: false, error: "Public verification sync failed." };
+  return data;
+}
+
+export async function publishCertificateForPublicVerification(record) {
+  if (!record?.id) return { ok: false, skipped: true };
+  try {
+    const data = await apiJson("/api/public/certificates", {
+      method: "POST",
+      headers: authHeaders({ "Content-Type": "application/json", Accept: "application/json" }),
+      body: JSON.stringify(buildPublicPayload(record)),
+    });
+    return { ok: true, ...data };
+  } catch (error) {
+    return { ok: false, error: error?.message || "Public verification sync failed.", status: error?.status || null };
+  }
 }
 
 export async function getPublicCertificate(certificateId) {
-  const id = String(certificateId || '').trim();
-  if (!id) return { ok: false, error: 'Certificate ID is required.' };
+  const id = String(certificateId || "").trim().toUpperCase();
+  if (!id) return { ok: false, error: "Certificate ID is required." };
   try {
-    const response = await fetch(`${apiBaseUrl()}/api/public/certificates/${encodeURIComponent(id)}`, {
-      headers: { Accept: 'application/json' },
-    });
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) return { ok: false, error: data?.error || 'Public verification record not found.', status: response.status };
+    const data = await apiJson(`/api/public/certificates/${encodeURIComponent(id)}`, { headers: { Accept: "application/json" } });
     return { ok: true, certificate: data?.certificate || null };
   } catch (error) {
-    return { ok: false, error: error?.message || 'Public verification service unavailable.' };
+    return { ok: false, error: error?.message || "Public verification service unavailable.", status: error?.status || null };
+  }
+}
+
+export async function verifyCertificatePublicly(certificateId) {
+  const id = String(certificateId || "").trim().toUpperCase();
+  if (!id) return { ok: false, state: "NOT_FOUND", error: "Certificate ID is required." };
+  try {
+    const data = await apiJson(`/api/public/verify/${encodeURIComponent(id)}`, { headers: { Accept: "application/json" } });
+    return { ok: true, ...data };
+  } catch (error) {
+    return { ok: false, state: error?.status === 404 ? "NOT_FOUND" : "UNAVAILABLE", error: error?.message || "Certificate verification is temporarily unavailable.", status: error?.status || null, code: error?.code || null };
+  }
+}
+
+export async function automateNewCertificate({ record, pdfBase64 }) {
+  if (!record?.id) return { ok: false, error: "Certificate ID is required." };
+  if (!pdfBase64) return { ok: false, error: "PDF certificate data is required." };
+  try {
+    const data = await apiJson("/api/certificates/automate", {
+      method: "POST",
+      headers: authHeaders({ "Content-Type": "application/json", Accept: "application/json" }),
+      body: JSON.stringify({
+        certificateId: record.id,
+        pdfBase64,
+        name: record?.data?.name || record?.data?.student_name || record?.data?.recipient_name || "Participant",
+        course: record?.data?.course || record?.templateName || "Certificate",
+        templateName: record?.templateName || "Certificate",
+        issuedAt: record?.issuedAt || null,
+        createdByName: record?.createdByName || "CertiChain Admin",
+        createdBy: record?.createdBy || "",
+        certificateHash: record?.documentHash || null,
+      }),
+    });
+    return { ok: true, ...data };
+  } catch (error) {
+    return { ok: false, error: error?.message || "Automatic IPFS and blockchain registration failed.", status: error?.status || null, code: error?.code || null };
   }
 }
 
 export async function updatePublicCertificateStatus(record) {
   if (!record?.id) return { ok: false, skipped: true };
+  const id = String(record.id).trim().toUpperCase();
+  const payload = buildPublicPayload(record);
   try {
-    const payload = {
-      status: record.blockchainRevoked || record.status === 'Revoked' ? 'Revoked' : (record.status || 'Issued'),
-      verificationStatus: record.blockchainRevoked || record.status === 'Revoked' ? 'Revoked' : (record.status === 'Disqualified' ? 'Disqualified' : 'Verified'),
-      blockchainRevoked: Boolean(record.blockchainRevoked),
-      blockchainRevokedAt: record.blockchainRevokedAt || null,
-      revocationReason: record.revocationReason || null,
-      blockchainStatus: record.blockchainStatus || 'Not registered',
-      transactionHash: record.transactionHash || null,
-      blockNumber: record.blockNumber || null,
-      ipfsCid: record.ipfsCid || null,
-      blockchainNetwork: record.blockchainNetwork || 'Ethereum Sepolia',
-      disqualificationReason: record.disqualificationReason || null,
-      disqualifiedBy: record.disqualifiedBy || null,
-      disqualifiedAt: record.disqualifiedAt || null,
-      certificateHash: record.documentHash || null,
-      createdByName: record.createdByName || 'Authorized Institution',
-      createdBy: record.createdBy || '',
-      name: String(record?.data?.name || record?.data?.student_name || record?.data?.recipient_name || record.name || 'Participant'),
-      course: String(record?.data?.course || record?.templateName || record.course || 'Certificate'),
-      templateName: String(record?.templateName || record.templateName || 'Certificate'),
-      issuedAt: record.issuedAt || null,
-    };
-    const response = await fetch(`${apiBaseUrl()}/api/public/certificates/${encodeURIComponent(String(record.id))}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+    const data = await apiJson(`/api/public/certificates/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      headers: authHeaders({ "Content-Type": "application/json", Accept: "application/json" }),
       body: JSON.stringify(payload),
     });
-    const data = await response.json().catch(() => ({}));
-    if (response.ok) return { ok: true, ...data };
-
-    // Older public records may not exist yet. POST creates them safely.
-    if (response.status === 404) return publishCertificateForPublicVerification(record);
-    return { ok: false, error: data?.error || 'Unable to update public verification record.', status: response.status };
+    return { ok: true, ...data };
   } catch (error) {
-    return { ok: false, error: error?.message || 'Public verification sync failed.' };
+    if (error?.status === 404) return publishCertificateForPublicVerification(record);
+    return { ok: false, error: error?.message || "Public verification sync failed.", status: error?.status || null };
   }
 }

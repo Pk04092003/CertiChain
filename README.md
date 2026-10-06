@@ -1,87 +1,91 @@
-# CertiChain V85
+# CertiChain V95 — Admin + Public Viewer
 
-This version uses the repository root as the Vite frontend for Vercel. The backend remains in `backend/` for Render.
+CertiChain is a certificate issuance and verification portal with one authenticated **Admin** role and a public **Viewer** flow that requires no account.
 
-## Vercel
-- Root Directory: `.`
+## Workflow
+
+### Admin
+1. Sign in using the administrator credentials configured on Render.
+2. Create/save an A4 certificate template.
+3. Issue a single certificate or upload a bulk CSV.
+4. A newly issued certificate is rendered to PDF.
+5. The PDF is uploaded automatically to IPFS.
+6. The IPFS CID is registered automatically in `CertificateRegistry` on Ethereum Sepolia.
+7. Public verification metadata is synchronized.
+8. The same PDF is emailed through Gmail API.
+9. A confirmation popup appears after the email is sent successfully.
+
+### Existing/old certificates
+Existing certificates are **not** emailed automatically. To email an old certificate:
+- Open **Issued Certificates**.
+- Select the certificates.
+- Choose **Email selected**.
+- Review and send them manually.
+
+Only the PDF certificate is attached to certificate emails.
+
+### Viewer
+The Viewer does not create an account or sign in. The Viewer can:
+- enter a certificate ID at `/verify`;
+- scan the QR code with a phone camera or Google Lens;
+- see a clear status seal: **VERIFIED**, **REVOKED**, **DISQUALIFIED**, or **UNREGISTERED**;
+- open the certificate PDF from IPFS when a public CID is available.
+
+## Certificate ID
+Every rendered certificate contains a centered, aligned **Certificate ID** footer. The template preview also injects `{{certificate_id}}`, `{{certificateId}}` and `{{id}}` so the ID can be used in editable text elements.
+
+## Deployment
+
+### Vercel frontend
+- Repository root: `.`
 - Framework: Vite
-- Build Command: `npm run build`
-- Output Directory: `dist`
-- Install Command: `npm install`
-- Disable/clear Production Overrides that replace these values.
+- Build command: `npm run build`
+- Output directory: `dist`
+- `VITE_API_URL=https://certichain-1-xc8l.onrender.com`
+- `VITE_PUBLIC_APP_URL=https://certichain-livid.vercel.app`
 
-## Render
-Set the service Root Directory to `backend/`, Build Command to `npm install`, and Start Command to `npm start`.
+### Render backend
+- Root directory: `backend`
+- Build command: `npm install`
+- Start command: `npm start`
 
-Never commit `.env` files containing secrets.
+Required Render environment variables:
 
-
-## Production deployment
-The frontend uses `https://certichain-1-xc8l.onrender.com` as its safe fallback API URL. For your Vercel Production deployment, keep `VITE_API_URL=https://certichain-1-xc8l.onrender.com` so the browser calls the current Render backend.
-
-
-## Gmail API email delivery
-
-CertiChain sends certificates directly from the authorized Gmail account using the Gmail API and Google OAuth 2.0, so a custom email domain is not required. Google's server-side OAuth flow uses offline access to obtain a refresh token that the backend can use when the issuer is not actively signed in. The `https://www.googleapis.com/auth/gmail.send` scope is the narrow Gmail scope used by this project for sending mail on the user's behalf.
-
-### Google Cloud setup
-
-1. Create/select a Google Cloud project and enable **Gmail API**.
-2. Configure **Google Auth Platform / OAuth consent screen**. For a personal Gmail account used for testing, choose External and add `praveen.kumaran0409@gmail.com` as a test user when Google presents that option.
-3. Create an OAuth 2.0 Client ID with application type **Web application**.
-4. Add this authorized redirect URI:
-   `https://YOUR-RENDER-SERVICE.onrender.com/api/email/google/callback`
-5. Put `GMAIL_CLIENT_ID`, `GMAIL_CLIENT_SECRET`, and `GMAIL_REDIRECT_URI` into Render.
-6. Deploy the backend.
-7. Open:
-   `https://YOUR-RENDER-SERVICE.onrender.com/api/email/google/auth`
-8. Sign in as `praveen.kumaran0409@gmail.com` and grant the Gmail send permission.
-9. Copy the refresh token shown by the callback page into Render as `GMAIL_REFRESH_TOKEN`, and redeploy.
-10. Keep `GMAIL_SENDER_EMAIL=praveen.kumaran0409@gmail.com`.
-
-Google documents that offline access returns a refresh token that should be stored securely on the server, and the client can refresh access tokens automatically when needed.
-
-The backend creates a MIME message and sends the PNG/PDF certificate attachments using Gmail's `users.messages.send`.
-
-### Render environment variables
-
-```env
+```text
 PORT=10000
-GMAIL_CLIENT_ID=...
-GMAIL_CLIENT_SECRET=...
-GMAIL_REDIRECT_URI=https://YOUR-RENDER-SERVICE.onrender.com/api/email/google/callback
-GMAIL_REFRESH_TOKEN=...
-GMAIL_SENDER_EMAIL=praveen.kumaran0409@gmail.com
+
+# Gmail API
+GMAIL_CLIENT_ID=
+GMAIL_CLIENT_SECRET=
+GMAIL_REDIRECT_URI=https://certichain-1-xc8l.onrender.com/api/email/google/callback
+GMAIL_REFRESH_TOKEN=
+GMAIL_SENDER_EMAIL=
 GMAIL_FROM_NAME=CertiChain
 FRONTEND_URL=https://certichain-livid.vercel.app
-MONGODB_URI=...
+
+# Admin authentication
+ADMIN_EMAIL=
+ADMIN_PASSWORD=
+ADMIN_NAME=CertiChain Admin
+ADMIN_JWT_SECRET=
+
+# MongoDB public metadata
+MONGODB_URI=
+CERTICHAIN_MONGODB_DB=certichain
+CERTICHAIN_PUBLIC_COLLECTION=public_certificates
+
+# Automatic IPFS
+PINATA_JWT=
+PINATA_NETWORK=public
+IPFS_GATEWAY_URL=https://ipfs.io/ipfs
+
+# Automatic blockchain
+BLOCKCHAIN_RPC_URL=
+BLOCKCHAIN_CONTRACT_ADDRESS=
+BLOCKCHAIN_PRIVATE_KEY=
+BLOCKCHAIN_NETWORK=Ethereum Sepolia
 ```
 
-Never commit the Gmail client secret or refresh token to GitHub.
+`BLOCKCHAIN_PRIVATE_KEY` must belong to a wallet authorized by the deployed `CertificateRegistry` contract and funded with Sepolia ETH for gas. Never put the private key, Gmail refresh token, MongoDB password, or API tokens in GitHub/Vercel frontend code.
 
-
-### Gmail OAuth scope
-The Gmail integration intentionally uses only `https://www.googleapis.com/auth/gmail.send`.
-
-## V91 Email workflow
-
-- New single certificates require the participant email before issuance and are automatically emailed immediately after the immutable certificate is saved.
-- New bulk certificates require the CSV `email` column and are automatically emailed immediately after issuance.
-- Existing/old certificates are never emailed automatically as a side effect of issuing new certificates.
-- To email an old certificate, open **Issued Certificates**, select one or more records, click **Email selected**, review the email template, and click **Send selected certificates**.
-- Failed automatic deliveries remain in the immutable registry with their delivery status and can be selected later for retry.
-
-
-## V92 Workflow and roles
-
-- **Admin account only:** only the administrator signs in to create templates, issue certificates, manage settings, and send previously issued certificates.
-- **Viewer:** no account, no login, no registration. A viewer enters a certificate ID or scans the certificate QR code.
-- **QR verification:** the QR code contains the public CertiChain HTTPS verification URL, so a phone camera or Google Lens can open `/verify/<certificateId>`.
-- **New certificates:** single and bulk certificates are automatically emailed at issuance time.
-- **Email attachment:** certificate emails contain **PDF only**. PNG is not attached to email.
-- **Old certificates:** they are never emailed automatically. Select the old certificates from **Issued Certificates** → **Email selected** → send the PDF certificates.
-
-## V93 public verification storage
-
-Public QR/certificate-ID verification is stored in MongoDB Atlas so a viewer can verify a certificate from another device without access to the Admin browser. Configure `MONGODB_URI`, `CERTICHAIN_MONGODB_DB` (default `certichain`) and `CERTICHAIN_PUBLIC_COLLECTION` (default `public_certificates`) on Render. Older certificates issued before this durable registry existed can be synchronized from **Certificate details → Sync public verification**.
-
+See `DEPLOYMENT_AUTOMATION.md` for the complete deployment checklist.

@@ -26,9 +26,9 @@ import { certificatePngToPdf } from "../certificateExport";
 import { upsertIssuedCertificates, getCurrentIssuer, updateIssuedCertificate, loadIssuedCertificates } from "../certificateStore";
 import { getNextCertificateNumber, loadInstitutionSettings, renderEmailTemplate } from "../institutionStore";
 import { addAuditLog } from "../auditStore";
-import { getSessionUser } from "../authStore";
+import { authHeaders, getSessionUser } from "../authStore";
 import { certificateBytes32 } from "../blockchainService";
-import { getVerificationUrl, publishCertificateForPublicVerification } from "../verificationUrl";
+import { automateNewCertificate, getVerificationUrl } from "../verificationUrl";
 
 const EMAIL_KEY_FALLBACK = "email";
 
@@ -144,6 +144,14 @@ async function captureCertificate(container) {
   });
 }
 
+async function certificatePngToPdfBase64(dataUrl, orientation = "landscape") {
+  const pdf = await certificatePngToPdf(dataUrl, orientation);
+  const bytes = new Uint8Array(await pdf.arrayBuffer());
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += 1) binary += String.fromCharCode(bytes[i]);
+  return btoa(binary);
+}
+
 
 async function getEmailServerStatus() {
   const controller = new AbortController();
@@ -163,13 +171,8 @@ async function getEmailServerStatus() {
   }
 }
 
-async function sendCertificateEmail({ record, dataUrl, verificationUrl, orientation }) {
-  const png = dataUrl;
-  const pdf = await certificatePngToPdf(png, orientation || record?.template?.page?.orientation || "landscape");
-  const pdfArray = new Uint8Array(await pdf.arrayBuffer());
-  let binary = "";
-  for (let i = 0; i < pdfArray.length; i += 1) binary += String.fromCharCode(pdfArray[i]);
-  const pdfBase64 = btoa(binary);
+async function sendCertificateEmail({ record, dataUrl, pdfBase64: suppliedPdfBase64, verificationUrl, orientation }) {
+  const pdfBase64 = suppliedPdfBase64 || await certificatePngToPdfBase64(dataUrl, orientation || record?.template?.page?.orientation || "landscape");
 
   const recipientName =
     valueForVariable(record.data, "name") ||
@@ -185,9 +188,10 @@ async function sendCertificateEmail({ record, dataUrl, verificationUrl, orientat
 
   const response = await fetch(`${API_BASE_URL}/api/email/certificate`, {
     method: "POST",
-    headers: {
+    headers: authHeaders({
       "Content-Type": "application/json",
-    },
+      Accept: "application/json",
+    }),
     body: JSON.stringify({
       to: record.email,
       subject,
@@ -226,7 +230,7 @@ async function sendOnePreparedMessage(item, maxAttempts = 2) {
     try {
       const response = await fetch(`${API_BASE_URL}/api/email/certificate`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: authHeaders({ "Content-Type": "application/json", Accept: "application/json" }),
         body: JSON.stringify(item.message),
         signal: controller.signal,
       });
@@ -410,19 +414,10 @@ export default function BulkIssue() {
 
     try {
       persistRecords([record]);
-      const publication = await publishCertificateForPublicVerification(record);
-      if (publication.ok) {
-        updateIssuedCertificate(record.id, { publicVerificationStatus: "Published", publicVerificationUpdatedAt: new Date().toISOString(), publicVerificationError: null });
-      } else {
-        updateIssuedCertificate(record.id, { publicVerificationStatus: "Pending", publicVerificationError: publication.error || "Unable to publish public verification record." });
-        addAuditLog("Public verification publish failed", { certificateId: record.id, error: publication.error || null });
-      }
       setGeneratedId(id);
-      setEmailStatus({ [id]: "Preparing…" });
+      setEmailStatus({ [id]: "Preparing PDF, IPFS and blockchain…" });
       setSingleEmailState("sending");
-      setMessage(publication.ok
-        ? `Certificate ${id} was issued successfully. Sending it to ${enteredEmail}…`
-        : `Certificate ${id} was issued and email delivery will continue, but public verification could not be synchronized yet. Open the certificate record and use Sync public verification before sharing the QR.`);
+      setMessage(`Certificate ${id} was issued successfully. Securing it on IPFS and blockchain, then emailing the PDF to ${enteredEmail}…`);
     } catch (error) {
       setMessage(error?.message || "Unable to save the issued certificate.");
     }
@@ -466,8 +461,34 @@ export default function BulkIssue() {
         return;
       }
       const dataUrl = await captureCertificate(previewRef.current);
+      const pdfBase64 = await certificatePngToPdfBase64(dataUrl, record?.template?.page?.orientation || "landscape");
+      setEmailStatus((current) => ({ ...current, [record.id]: "Registering IPFS + blockchain…" }));
+      const automation = await automateNewCertificate({ record, pdfBase64 });
+      if (!automation.ok) {
+        updateIssuedCertificate(record.id, { blockchainStatus: "Not registered", ipfsStatus: "Not uploaded", emailStatus: "Failed", emailError: automation.error || "Automatic IPFS and blockchain registration failed.", publicVerificationStatus: "Pending" });
+        appendHistorySafe(record.id, "Automatic IPFS/blockchain registration failed", { error: automation.error || null });
+        addAuditLog("Automatic IPFS/blockchain registration failed", { certificateId: record.id, error: automation.error || null });
+        throw new Error(automation.error || "Automatic IPFS and blockchain registration failed.");
+      }
+      const chain = automation.blockchain || {};
+      const ipfs = automation.ipfs || {};
+      updateIssuedCertificate(record.id, {
+        ipfsCid: ipfs.cid || chain.ipfsCid || null,
+        ipfsStatus: ipfs.cid || chain.ipfsCid ? "Uploaded" : "Not uploaded",
+        ipfsUploadedAt: ipfs.cid ? new Date().toISOString() : null,
+        transactionHash: chain.transactionHash || record.transactionHash || null,
+        blockNumber: chain.blockNumber || record.blockNumber || null,
+        blockchainWallet: chain.wallet || null,
+        blockchainNetwork: chain.network || "Ethereum Sepolia",
+        blockchainStatus: chain.exists ? "Registered" : "Not registered",
+        blockchainRegisteredAt: chain.exists ? new Date().toISOString() : null,
+        publicVerificationStatus: automation.publicVerification?.ok ? "Published" : "Blockchain backed",
+        publicVerificationUpdatedAt: new Date().toISOString(),
+        publicVerificationError: automation.publicVerification?.ok ? null : (automation.publicVerification?.error || null),
+      });
       const verificationUrl = getVerificationUrl(record.id);
-      const result = await sendCertificateEmail({ record, dataUrl, verificationUrl, orientation: record?.template?.page?.orientation });
+      setEmailStatus((current) => ({ ...current, [record.id]: "Sending PDF…" }));
+      const result = await sendCertificateEmail({ record, pdfBase64, verificationUrl, orientation: record?.template?.page?.orientation });
       const sent = Boolean(result.sent);
       updateRecordEmailStatus(record.id, sent ? "Sent" : "Failed", {
         email,
@@ -478,7 +499,10 @@ export default function BulkIssue() {
       addAuditLog(sent ? "Certificate email sent automatically" : "Automatic certificate email failed", { certificateId: record.id, to: email });
       setEmailStatus((current) => ({ ...current, [record.id]: sent ? "Sent" : "Failed" }));
       setSingleEmailState(sent ? "sent" : "error");
-      setMessage(sent ? `Certificate ${record.id} was issued and emailed to ${email}.` : `Certificate ${record.id} was issued, but the email failed.`);
+      setMessage(sent ? `Certificate ${record.id} was issued, secured on IPFS/blockchain, and emailed to ${email}.` : `Certificate ${record.id} was issued, but the email failed.`);
+      if (sent) {
+        window.alert(`Certificate mailed successfully\n\nCertificate ID: ${record.id}\nRecipient: ${email}\nAttachment: PDF\nBlockchain: ${chain.exists ? "Registered" : "Not registered"}\nIPFS: ${ipfs.cid || chain.ipfsCid ? "Uploaded" : "Not uploaded"}`);
+      }
     } catch (error) {
       console.error(error);
       updateRecordEmailStatus(record.id, "Failed", { emailError: error.message || "Certificate email failed." });
@@ -684,31 +708,13 @@ export default function BulkIssue() {
       // (especially one containing images) is stored once rather than once per
       // CSV row. This keeps bulk issuance reliable for larger CSV files.
       persistRecords(issuedRecords);
-      // Publish every newly issued certificate before the bulk-email state is opened.
-      // This removes the race where email delivery could start while the public QR
-      // record was still missing from the verification database.
-      const publicationResults = await Promise.all(issuedRecords.map((record) => publishCertificateForPublicVerification(record)));
-      publicationResults.forEach((result, index) => {
-        const record = issuedRecords[index];
-        updateIssuedCertificate(record.id, result.ok
-          ? { publicVerificationStatus: "Published", publicVerificationUpdatedAt: new Date().toISOString(), publicVerificationError: null }
-          : { publicVerificationStatus: "Pending", publicVerificationError: result.error || "Unable to publish public verification record." });
-      });
-      const publicationFailures = publicationResults.filter((result) => !result.ok);
-      if (publicationFailures.length) {
-        addAuditLog('Bulk public verification publish partially failed', { count: publicationFailures.length, certificateIds: issuedRecords.filter((_, index) => !publicationResults[index]?.ok).map((record) => record.id) });
-      }
       addAuditLog('Bulk certificates issued', { count: issuedRecords.length, template: selectedTemplate.name, certificateIds: issuedRecords.map((record) => record.id) });
 
       setIssuedBulkRecords(issuedRecords);
       setEmailStatus(Object.fromEntries(issuedRecords.map((record) => [record.id, "Not sent"])));
       setBulkIssued(true);
       setBulkEmailState({ status: "idle", sent: 0, failed: 0, total: issuedRecords.length });
-      setMessage(
-        publicationFailures.length
-          ? `${issuedRecords.length} certificates were created. ${publicationFailures.length} public verification record${publicationFailures.length === 1 ? "" : "s"} could not be synchronized yet; email delivery is still starting now.`
-          : `${issuedRecords.length} certificates were created and published for public QR verification. Automatic email delivery is starting now.`
-      );
+      setMessage(`${issuedRecords.length} certificates were created. Automatic IPFS, blockchain registration and PDF email delivery are starting now.`);
     } catch (error) {
       console.error("Bulk certificate issuance failed:", error);
       setIssuedBulkRecords([]);
@@ -810,12 +816,32 @@ export default function BulkIssue() {
           let binary = "";
           for (let i = 0; i < pdfArray.length; i += 1) binary += String.fromCharCode(pdfArray[i]);
           const pdfBase64 = btoa(binary);
+          setEmailStatus((current) => ({ ...current, [record.id]: "Registering IPFS + blockchain…" }));
+          const automation = await automateNewCertificate({ record, pdfBase64 });
+          if (!automation.ok) throw new Error(`Automatic IPFS/blockchain setup failed: ${automation.error || "Unknown error"}`);
+          const chain = automation.blockchain || {};
+          const ipfs = automation.ipfs || {};
+          updateIssuedCertificate(record.id, {
+            ipfsCid: ipfs.cid || chain.ipfsCid || null,
+            ipfsStatus: ipfs.cid || chain.ipfsCid ? "Uploaded" : "Not uploaded",
+            ipfsUploadedAt: ipfs.cid ? new Date().toISOString() : null,
+            transactionHash: chain.transactionHash || record.transactionHash || null,
+            blockNumber: chain.blockNumber || record.blockNumber || null,
+            blockchainWallet: chain.wallet || null,
+            blockchainNetwork: chain.network || "Ethereum Sepolia",
+            blockchainStatus: chain.exists ? "Registered" : "Not registered",
+            blockchainRegisteredAt: chain.exists ? new Date().toISOString() : null,
+            publicVerificationStatus: automation.publicVerification?.ok ? "Published" : "Blockchain backed",
+            publicVerificationUpdatedAt: new Date().toISOString(),
+            publicVerificationError: automation.publicVerification?.ok ? null : (automation.publicVerification?.error || null),
+          });
           const verificationUrl = getVerificationUrl(record.id);
           const recipientName = valueForVariable(record.data, "name") || valueForVariable(record.data, "student_name") || valueForVariable(record.data, "recipient_name") || "Participant";
           const course = valueForVariable(record.data, "course") || record.templateName;
           return {
             ok: true,
-            record,
+            record: loadIssuedCertificates().find((item) => item.id === record.id) || record,
+            automation,
             message: {
               to: record.email,
               subject: `Certificate issued — ${recipientName}`,
@@ -879,9 +905,14 @@ export default function BulkIssue() {
       setBulkEmailState({ status: failed === 0 ? "sent" : sent > 0 ? "partial" : "failed", sent, failed, total });
       setMessage(
         failed === 0
-          ? `All ${sent} participant certificates were handed to the Gmail API for parallel delivery.`
-          : `${sent} email${sent === 1 ? "" : "s"} sent, ${failed} failed. Emails were submitted in parallel; the recipient mail provider may still queue or deliver them at different times.`
+          ? `All ${sent} participant certificates were secured on IPFS/blockchain and mailed successfully as PDF attachments.`
+          : `${sent} certificate email${sent === 1 ? "" : "s"} sent, ${failed} failed. Failed certificates remain in the registry for recovery.`
       );
+      if (sent > 0) {
+        const mailedIds = ready.filter((item) => resultById.get(item.record.id)?.sent).map((item) => item.record.id);
+        const title = failed === 0 ? "Certificates mailed successfully" : "Certificates partially mailed";
+        window.alert(`${title}\n\nMailed: ${sent}\nFailed: ${failed}\nAttachment: PDF only\n\n${mailedIds.join("\n")}`);
+      }
     } catch (error) {
       console.error(error);
       setBulkEmailState({ status: "failed", sent: 0, failed: total, total });

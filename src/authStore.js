@@ -1,105 +1,79 @@
 export const USERS_KEY = "certichain-users";
 export const SESSION_KEY = "certichain-session-user";
+export const TOKEN_KEY = "certichain-admin-token";
+
+const API_BASE = String(import.meta.env.VITE_API_URL || "https://certichain-1-xc8l.onrender.com").replace(/\/$/, "");
 
 const DEFAULT_ADMIN = {
   id: "USR-ADMIN",
   name: "CertiChain Admin",
   email: "admin@certichain.local",
   role: "Admin",
-  password: "admin123",
 };
-
-function normaliseUsers(users) {
-  const admin =
-    (Array.isArray(users) ? users : []).find((item) => String(item?.role || "").toLowerCase() === "admin") ||
-    (Array.isArray(users) ? users : []).find((item) => String(item?.role || "").toLowerCase() === "institution admin");
-
-  return [{
-    ...DEFAULT_ADMIN,
-    ...(admin || {}),
-    role: "Admin",
-  }];
-}
 
 export function loadUsers() {
   try {
-    const data = JSON.parse(localStorage.getItem(USERS_KEY) || "null");
-    const migrated = normaliseUsers(data);
-    localStorage.setItem(USERS_KEY, JSON.stringify(migrated));
-    return migrated;
+    const session = JSON.parse(localStorage.getItem(SESSION_KEY) || "null");
+    return session?.email ? [{ ...DEFAULT_ADMIN, ...session, role: "Admin" }] : [DEFAULT_ADMIN];
   } catch {
-    const defaults = [DEFAULT_ADMIN];
-    localStorage.setItem(USERS_KEY, JSON.stringify(defaults));
-    return defaults;
+    return [DEFAULT_ADMIN];
   }
 }
 
-export function login(email, password) {
-  const user = loadUsers().find(
-    (item) =>
-      item.email.toLowerCase() === String(email).trim().toLowerCase() &&
-      item.password === password &&
-      item.role === "Admin"
-  );
+export async function login(email, password) {
+  const response = await fetch(`${API_BASE}/api/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify({ email: String(email || "").trim(), password: String(password || "") }),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data?.error || "Unable to sign in as administrator.");
+  if (!data?.token || !data?.user) throw new Error("Administrator session could not be created.");
 
-  if (!user) throw new Error("Invalid admin email or password.");
-
-  const session = {
-    id: user.id,
-    name: user.name,
-    email: user.email,
-    role: "Admin",
-  };
-
-  localStorage.setItem(SESSION_KEY, JSON.stringify(session));
-  localStorage.setItem("certichain-current-issuer", session.email);
+  localStorage.setItem(TOKEN_KEY, data.token);
+  localStorage.setItem(SESSION_KEY, JSON.stringify({ ...data.user, role: "Admin" }));
+  localStorage.setItem("certichain-current-issuer", data.user.email);
   window.dispatchEvent(new CustomEvent("certichain:auth-updated"));
-  return session;
+  return data.user;
+}
+
+export function getAdminToken() {
+  try { return String(localStorage.getItem(TOKEN_KEY) || "").trim(); } catch { return ""; }
+}
+
+export function authHeaders(extra = {}) {
+  const token = getAdminToken();
+  return token ? { ...extra, Authorization: `Bearer ${token}` } : { ...extra };
 }
 
 export function getSessionUser() {
   try {
+    const token = getAdminToken();
     const session = JSON.parse(localStorage.getItem(SESSION_KEY) || "null");
-    if (session?.email && session?.role === "Admin") return session;
-
-    // Remove legacy Issuer/Viewer sessions so they cannot continue to access
-    // administrator pages after the role model migration.
+    if (token && session?.email && session?.role === "Admin") return session;
     if (session) localStorage.removeItem(SESSION_KEY);
+    if (!token) localStorage.removeItem(TOKEN_KEY);
   } catch {
     localStorage.removeItem(SESSION_KEY);
+    localStorage.removeItem(TOKEN_KEY);
   }
   return null;
 }
 
 export function logout() {
+  localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(SESSION_KEY);
   window.dispatchEvent(new CustomEvent("certichain:auth-updated"));
 }
 
+// Profile changes are deliberately local-only in this client. The authoritative
+// admin credentials live in Render environment variables; this function keeps
+// compatibility with the existing Settings UI and session display.
 export function saveUser(user) {
-  const current = loadUsers()[0];
-  const merged = {
-    ...current,
-    ...(user || {}),
-    id: current.id,
-    role: "Admin",
-  };
-  localStorage.setItem(USERS_KEY, JSON.stringify([merged]));
-
-  const session = getSessionUser();
-  if (session?.id === merged.id) {
-    localStorage.setItem(
-      SESSION_KEY,
-      JSON.stringify({
-        id: merged.id,
-        name: merged.name,
-        email: merged.email,
-        role: "Admin",
-      })
-    );
-    window.dispatchEvent(new CustomEvent("certichain:auth-updated"));
-  }
-
+  const current = getSessionUser() || DEFAULT_ADMIN;
+  const merged = { ...current, ...(user || {}), id: "USR-ADMIN", role: "Admin" };
+  localStorage.setItem(SESSION_KEY, JSON.stringify(merged));
+  window.dispatchEvent(new CustomEvent("certichain:auth-updated"));
   return [merged];
 }
 
