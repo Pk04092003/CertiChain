@@ -14,9 +14,9 @@ This package uses Gmail API through Google OAuth 2.0. It does **not** use Resend
 
 Configure the Render web service with:
 
-- Root Directory: `backend`
-- Build Command: `npm install`
-- Start Command: `npm start`
+- Root Directory: `.`
+- Build Command: `cd backend && npm install`
+- Start Command: `cd backend && npm start`
 
 Environment variables:
 
@@ -86,3 +86,7 @@ Before pushing, make sure these are absent from tracked files:
 - MongoDB passwords / full connection strings with credentials
 - Resend API keys
 - blockchain private keys / RPC secrets
+
+
+### OAuth state fix
+This version uses a signed HttpOnly OAuth-state cookie instead of an in-memory state Map. This is important on Render because service restarts/redeploys can discard in-memory state. Start a fresh authorization at `/api/email/google/auth`; do not reuse an old callback URL.

@@ -2,7 +2,7 @@ services:
   - type: web
     name: certichain-backend
     runtime: node
-    rootDir: backend
-    buildCommand: npm install
-    startCommand: npm start
+    rootDir: .
+    buildCommand: cd backend && npm install
+    startCommand: cd backend && npm start
     autoDeploy: true

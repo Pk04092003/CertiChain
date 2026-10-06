@@ -88,7 +88,68 @@ function readEmailConfig() {
 }
 
 const GMAIL_SCOPE = 'https://www.googleapis.com/auth/gmail.send';
-const pendingOAuthStates = new Map();
+const OAUTH_STATE_COOKIE = 'certichain_gmail_oauth_state';
+const OAUTH_STATE_MAX_AGE = 10 * 60;
+
+function stateCookieSecret() {
+  const config = readEmailConfig();
+  // Reuse the OAuth client secret as the state-signing secret so no extra
+  // credential is required. The secret never leaves the backend.
+  return config.clientSecret || 'certichain-oauth-state-secret';
+}
+
+function signOAuthState(state) {
+  return crypto.createHmac('sha256', stateCookieSecret()).update(state).digest('hex');
+}
+
+function setOAuthStateCookie(res, state) {
+  const signed = `${state}.${signOAuthState(state)}`;
+  const secure = process.env.NODE_ENV === 'production' || process.env.RENDER === 'true';
+  const flags = [
+    `${OAUTH_STATE_COOKIE}=${encodeURIComponent(signed)}`,
+    'Path=/api/email/google',
+    `Max-Age=${OAUTH_STATE_MAX_AGE}`,
+    'HttpOnly',
+    'SameSite=Lax',
+    ...(secure ? ['Secure'] : []),
+  ];
+  res.setHeader('Set-Cookie', flags.join('; '));
+}
+
+function clearOAuthStateCookie(res) {
+  const secure = process.env.NODE_ENV === 'production' || process.env.RENDER === 'true';
+  const flags = [
+    `${OAUTH_STATE_COOKIE}=`,
+    'Path=/api/email/google',
+    'Max-Age=0',
+    'HttpOnly',
+    'SameSite=Lax',
+    ...(secure ? ['Secure'] : []),
+  ];
+  res.setHeader('Set-Cookie', flags.join('; '));
+}
+
+function readCookie(req, name) {
+  const header = String(req.headers?.cookie || '');
+  for (const part of header.split(';')) {
+    const idx = part.indexOf('=');
+    if (idx < 0) continue;
+    const key = part.slice(0, idx).trim();
+    if (key !== name) continue;
+    return decodeURIComponent(part.slice(idx + 1).trim());
+  }
+  return '';
+}
+
+function verifyOAuthState(req, state) {
+  const cookieValue = readCookie(req, OAUTH_STATE_COOKIE);
+  const [cookieState, signature] = cookieValue.split('.');
+  if (!cookieState || !signature || cookieState !== state) return false;
+  const expected = signOAuthState(cookieState);
+  const a = Buffer.from(signature, 'hex');
+  const b = Buffer.from(expected, 'hex');
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
 
 function oauthClient() {
   const config = readEmailConfig();
@@ -96,14 +157,11 @@ function oauthClient() {
   return new google.auth.OAuth2(config.clientId, config.clientSecret, config.redirectUri);
 }
 
-function createGoogleAuthUrl() {
+function createGoogleAuthUrl(res) {
   const client = oauthClient();
   if (!client) return null;
-  const state = crypto.randomBytes(24).toString('hex');
-  pendingOAuthStates.set(state, Date.now());
-  for (const [key, createdAt] of pendingOAuthStates) {
-    if (Date.now() - createdAt > 10 * 60 * 1000) pendingOAuthStates.delete(key);
-  }
+  const state = crypto.randomBytes(32).toString('hex');
+  setOAuthStateCookie(res, state);
   return client.generateAuthUrl({
     access_type: 'offline',
     prompt: 'consent',
@@ -224,7 +282,7 @@ app.get('/api/email/status', async (_, res) => {
   res.json({
     configured: config.configured, connected, provider:'Gmail API',
     from: profile?.emailAddress || config.senderEmail || null,
-    authUrl: !connected ? createGoogleAuthUrl() : null,
+    authUrl: !connected ? '/api/email/google/auth' : null,
     message: !config.configured
       ? 'Gmail API is not configured. Add GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET and GMAIL_REDIRECT_URI to Render.'
       : !config.refreshToken
@@ -234,7 +292,7 @@ app.get('/api/email/status', async (_, res) => {
 });
 
 app.get('/api/email/google/auth', (_, res) => {
-  const url = createGoogleAuthUrl();
+  const url = createGoogleAuthUrl(res);
   if (!url) return res.status(503).send('<h2>Gmail OAuth is not configured</h2><p>Set GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET and GMAIL_REDIRECT_URI on the backend.</p>');
   res.redirect(url);
 });
@@ -244,8 +302,8 @@ app.get('/api/email/google/callback', async (req,res) => {
   const code = String(req.query?.code || '');
   const oauthError = String(req.query?.error || '');
   if (oauthError) return res.status(400).send(`<h2>Google authorization failed</h2><p>${sanitizeHeader(oauthError)}</p>`);
-  if (!state || !pendingOAuthStates.has(state)) return res.status(400).send('<h2>Invalid OAuth state</h2><p>Please start the Gmail connection again from CertiChain.</p>');
-  pendingOAuthStates.delete(state);
+  if (!state || !verifyOAuthState(req, state)) return res.status(400).send('<h2>Invalid or expired OAuth state</h2><p>Please start the Gmail connection again from CertiChain. Do not reuse an old Google callback URL.</p>');
+  clearOAuthStateCookie(res);
   if (!code) return res.status(400).send('<h2>No authorization code</h2>');
   try {
     const client = oauthClient();
