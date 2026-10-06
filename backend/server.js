@@ -200,6 +200,27 @@ function normalizeId(value) {
   return String(value || "").trim().toUpperCase();
 }
 
+function stablePublicIntegrityInput(body = {}) {
+  const publicFields = body.publicFields && typeof body.publicFields === "object" && !Array.isArray(body.publicFields)
+    ? Object.fromEntries(Object.entries(body.publicFields).filter(([key]) => !/^email$/i.test(String(key))).sort(([a], [b]) => String(a).localeCompare(String(b))))
+    : {};
+  return JSON.stringify({
+    id: normalizeId(body.id || body.certificateId),
+    name: String(body.name || "Participant").trim(),
+    course: String(body.course || body.templateName || "Certificate").trim(),
+    templateName: String(body.templateName || "Certificate").trim(),
+    issuedAt: body.issuedAt || null,
+    createdByName: String(body.createdByName || "Authorized Institution"),
+    createdBy: String(body.createdBy || ""),
+    publicFields,
+    certificateHash: body.certificateHash || null,
+  });
+}
+
+function calculateIntegrityHash(body = {}) {
+  return crypto.createHash("sha256").update(stablePublicIntegrityInput(body)).digest("hex");
+}
+
 function publicCertificatePayload(body = {}) {
   const id = normalizeId(body.id || body.certificateId);
   if (!id) return null;
@@ -228,6 +249,8 @@ function publicCertificatePayload(body = {}) {
     disqualifiedBy: body.disqualifiedBy || null,
     disqualifiedAt: body.disqualifiedAt || null,
     certificateHash: body.certificateHash || null,
+    integrityHash: body.integrityHash || calculateIntegrityHash(body),
+    history: Array.isArray(body.history) ? body.history : [],
     publicFields: body.publicFields && typeof body.publicFields === "object" && !Array.isArray(body.publicFields)
       ? Object.fromEntries(Object.entries(body.publicFields).filter(([key]) => !/^email$/i.test(String(key))))
       : {},
@@ -647,6 +670,8 @@ app.post("/api/certificates/automate", requireAdmin, async (req, res) => {
       createdByName: String(req.admin?.name || req.body?.createdByName || "CertiChain Admin"),
       createdBy: String(req.admin?.sub || req.body?.createdBy || ""),
       certificateHash: req.body?.certificateHash || null,
+      publicFields: req.body?.publicFields && typeof req.body.publicFields === "object" && !Array.isArray(req.body.publicFields) ? req.body.publicFields : {},
+      history: Array.isArray(req.body?.history) ? req.body.history : [],
       status: "Issued",
     };
     if (!certificateId) return res.status(400).json({ error: "Certificate ID is required." });
@@ -829,15 +854,39 @@ app.get("/api/public/verify/:certificateId", async (req, res) => {
     disqualifiedBy: metadata?.disqualifiedBy || null,
     disqualifiedAt: metadata?.disqualifiedAt || null,
     certificateHash: metadata?.certificateHash || null,
+    integrityHash: metadata?.integrityHash || null,
     publicFields: metadata?.publicFields && typeof metadata.publicFields === "object" ? metadata.publicFields : {},
+    history: Array.isArray(metadata?.history) ? metadata.history : [],
     issuerAddress: chain?.issuer || metadata?.createdBy || null,
     contractAddress: chain?.contractAddress || blockchainConfig().contractAddress || null,
   };
+
+  const integrityExpected = metadata?.integrityHash || null;
+  const integrityActual = metadata ? calculateIntegrityHash({
+    id,
+    name: metadata.name,
+    course: metadata.course,
+    templateName: metadata.templateName,
+    issuedAt: metadata.issuedAt,
+    createdByName: metadata.createdByName,
+    createdBy: metadata.createdBy,
+    publicFields: metadata.publicFields,
+    certificateHash: metadata.certificateHash,
+  }) : null;
+  const integrityMatched = Boolean(integrityExpected && integrityActual && integrityExpected === integrityActual);
 
   return res.json({
     ok: true,
     state,
     certificate,
+    integrity: {
+      available: Boolean(integrityExpected),
+      matched: integrityMatched,
+      originalHash: integrityExpected,
+      currentHash: integrityActual,
+      algorithm: "SHA-256",
+      scope: "Public certificate record fields (not the PDF document)",
+    },
     blockchain: chain ? {
       configured: Boolean(chain.configured),
       exists: Boolean(chain.exists),
@@ -869,6 +918,7 @@ app.patch("/api/public/certificates/:certificateId", requireAdmin, async (req, r
       blockchainRevokedAt: req.body?.blockchainRevokedAt,
       revocationReason: req.body?.revocationReason,
       certificateHash: req.body?.certificateHash,
+      history: req.body?.history,
       createdByName: req.body?.createdByName,
       createdBy: req.body?.createdBy,
       name: req.body?.name,

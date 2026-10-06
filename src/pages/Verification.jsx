@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { ArrowLeft, Ban, CheckCircle2, Copy, Search, ShieldCheck, XCircle, AlertTriangle, Clock3, Hash, Blocks, UserRound, GraduationCap, Building2, CalendarDays, Link2, FileKey2, Wallet } from "lucide-react";
+import { ArrowLeft, Ban, CheckCircle2, Copy, Search, ShieldCheck, XCircle, AlertTriangle, Clock3, Hash, Blocks, UserRound, GraduationCap, Building2, CalendarDays, Link2, FileKey2, Wallet, ShieldAlert, Fingerprint, History, QrCode, Check, X } from "lucide-react";
 import { getPublicAppUrl, isLocalVerificationUrl, verifyCertificatePublicly } from "../verificationUrl";
 
 function formatDate(value) {
@@ -61,6 +61,35 @@ function Detail({ icon: Icon, label, value, wide = false, mono = false }) {
   );
 }
 
+function Timeline({ items = [] }) {
+  const normalized = Array.isArray(items) ? items.filter(Boolean) : [];
+  if (!normalized.length) return (
+    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5 text-sm text-slate-500">Certificate lifecycle history will appear here as events are recorded.</div>
+  );
+  return (
+    <div className="space-y-0">
+      {normalized.map((item, index) => (
+        <div key={`${item.at || "event"}-${index}`} className="relative flex gap-4 pb-6 last:pb-0">
+          {index < normalized.length - 1 && <span className="absolute left-[11px] top-7 h-full w-px bg-slate-200" />}
+          <span className="relative mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-600 text-white shadow-sm"><Check size={13} strokeWidth={3} /></span>
+          <div className="min-w-0 flex-1 rounded-2xl border border-slate-200 bg-white p-4">
+            <div className="font-semibold text-slate-900">{item.action || "Certificate event"}</div>
+            <div className="mt-1 text-xs text-slate-500">{formatDate(item.at)}</div>
+            {item.reason && <div className="mt-2 text-sm text-slate-600">Reason: {item.reason}</div>}
+            {(item.transactionHash || item.blockNumber || item.ipfsCid) && (
+              <div className="mt-3 grid gap-2 text-xs text-slate-500 sm:grid-cols-2">
+                {item.transactionHash && <div><span className="font-semibold">Transaction:</span> <span className="font-mono break-all">{item.transactionHash}</span></div>}
+                {item.blockNumber && <div><span className="font-semibold">Block:</span> {item.blockNumber}</div>}
+                {item.ipfsCid && <div className="sm:col-span-2"><span className="font-semibold">IPFS:</span> <span className="font-mono break-all">{item.ipfsCid}</span></div>}
+              </div>
+            )}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function Verification() {
   const { certificateId } = useParams();
   const [result, setResult] = useState(null);
@@ -87,6 +116,8 @@ export default function Verification() {
   const config = STATES[state];
   const Icon = config?.icon || XCircle;
   const publicUrlIsLocal = isLocalVerificationUrl();
+  const integrity = result?.integrity || null;
+  const timeline = Array.isArray(certificate?.history) ? certificate.history : [];
 
   const copyId = async () => {
     try { await navigator.clipboard?.writeText(id); } catch {}
@@ -205,6 +236,53 @@ export default function Verification() {
                   {certificate.blockchainRevokedAt && <div className="mt-2 text-xs">Revoked: {formatDate(certificate.blockchainRevokedAt)}</div>}
                 </div>
               )}
+            </section>
+
+            <section className={`rounded-3xl border p-6 sm:p-8 ${integrity?.matched ? "border-emerald-200 bg-emerald-50" : integrity?.available ? "border-rose-200 bg-rose-50" : "border-slate-200 bg-white"}`}>
+              <div className="flex items-start gap-4">
+                <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${integrity?.matched ? "bg-emerald-600 text-white" : integrity?.available ? "bg-rose-600 text-white" : "bg-slate-200 text-slate-700"}`}>
+                  {integrity?.matched ? <Fingerprint size={22} /> : integrity?.available ? <ShieldAlert size={22} /> : <Hash size={22} />}
+                </div>
+                <div className="min-w-0">
+                  <h2 className="font-bold">{integrity?.matched ? "Certificate data integrity verified" : integrity?.available ? "Certificate data integrity mismatch" : "Certificate data integrity"}</h2>
+                  <p className="mt-1 text-sm leading-6 text-slate-600">
+                    {integrity?.matched
+                      ? "The SHA-256 fingerprint of the published certificate details matches the original integrity record."
+                      : integrity?.available
+                        ? "The current published certificate details do not match the original integrity fingerprint."
+                        : "An integrity fingerprint is not available for this certificate record."}
+                  </p>
+                </div>
+              </div>
+              {integrity?.available && (
+                <div className="mt-5 grid gap-3 text-xs sm:grid-cols-2">
+                  <div className="rounded-xl border border-white/80 bg-white/80 p-3"><div className="font-semibold text-slate-500">Algorithm</div><div className="mt-1 font-mono font-semibold">{integrity.algorithm || "SHA-256"}</div></div>
+                  <div className="rounded-xl border border-white/80 bg-white/80 p-3"><div className="font-semibold text-slate-500">Result</div><div className="mt-1 font-semibold">{integrity.matched ? "MATCH — AUTHENTIC RECORD" : "MISMATCH — REVIEW REQUIRED"}</div></div>
+                  <div className="rounded-xl border border-white/80 bg-white/80 p-3 sm:col-span-2"><div className="font-semibold text-slate-500">Original fingerprint</div><div className="mt-1 break-all font-mono">{integrity.originalHash || "—"}</div></div>
+                  <div className="rounded-xl border border-white/80 bg-white/80 p-3 sm:col-span-2"><div className="font-semibold text-slate-500">Current fingerprint</div><div className="mt-1 break-all font-mono">{integrity.currentHash || "—"}</div></div>
+                </div>
+              )}
+            </section>
+
+            <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+              <div className="flex items-start gap-3">
+                <History className="mt-0.5 shrink-0 text-blue-700" size={21} />
+                <div>
+                  <h2 className="font-bold text-slate-950">Certificate lifecycle</h2>
+                  <p className="mt-1 text-sm leading-6 text-slate-500">A chronological record of certificate creation, IPFS storage, blockchain registration, email delivery and status changes.</p>
+                </div>
+              </div>
+              <div className="mt-6"><Timeline items={timeline} /></div>
+            </section>
+
+            <section className="rounded-3xl border border-indigo-100 bg-indigo-50 p-6 shadow-sm sm:p-8">
+              <div className="flex items-start gap-3">
+                <QrCode className="mt-0.5 shrink-0 text-indigo-700" size={21} />
+                <div>
+                  <h2 className="font-bold text-indigo-950">Dynamic QR verification</h2>
+                  <p className="mt-1 text-sm leading-6 text-indigo-900/75">This QR code opens the certificate's live CertiChain verification record. If the certificate is later revoked or disqualified, scanning the same printed QR code shows the updated status automatically.</p>
+                </div>
+              </div>
             </section>
 
             <section className="rounded-3xl border border-blue-100 bg-blue-50 p-6 sm:p-8">

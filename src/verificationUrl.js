@@ -57,6 +57,8 @@ function buildPublicPayload(record) {
     disqualifiedBy: record.disqualifiedBy || null,
     disqualifiedAt: record.disqualifiedAt || null,
     certificateHash: record.documentHash || null,
+    integrityHash: record.integrityHash || null,
+    history: Array.isArray(record.history) ? record.history : [],
     publicFields,
   };
 }
@@ -126,6 +128,8 @@ export async function automateNewCertificate({ record, pdfBase64 }) {
         createdByName: record?.createdByName || "CertiChain Admin",
         createdBy: record?.createdBy || "",
         certificateHash: record?.documentHash || null,
+        publicFields: record?.data && typeof record.data === "object" ? Object.fromEntries(Object.entries(record.data).filter(([key]) => !/^email$/i.test(String(key)))) : {},
+        history: Array.isArray(record?.history) ? record.history : [],
       }),
     });
     return { ok: true, ...data };
