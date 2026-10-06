@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { ArrowLeft, Ban, CheckCircle2, Copy, Search, ShieldCheck, XCircle, AlertTriangle, Clock3, Hash, Blocks, UserRound, GraduationCap, Building2, CalendarDays, Link2, FileKey2 } from "lucide-react";
+import { ArrowLeft, Ban, CheckCircle2, Copy, Search, ShieldCheck, XCircle, AlertTriangle, Clock3, Hash, Blocks, UserRound, GraduationCap, Building2, CalendarDays, Link2, FileKey2, Wallet } from "lucide-react";
 import { getPublicAppUrl, isLocalVerificationUrl, verifyCertificatePublicly } from "../verificationUrl";
 
 function formatDate(value) {
@@ -171,6 +171,23 @@ export default function Verification() {
                 <Detail icon={Hash} label="Block number" value={certificate.blockNumber} mono />
                 <Detail icon={FileKey2} label="Certificate hash" value={certificate.certificateHash} mono />
                 <Detail icon={Link2} label="IPFS CID" value={certificate.ipfsCid} mono wide />
+              </div>
+
+              {certificate.publicFields && Object.keys(certificate.publicFields).length > 0 && (
+                <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-5">
+                  <div className="font-bold text-slate-900">Certificate variables</div>
+                  <p className="mt-1 text-xs text-slate-500">All issuer-defined certificate fields are shown here. Participant email is kept private.</p>
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                    {Object.entries(certificate.publicFields).map(([key, value]) => (
+                      <Detail key={key} icon={FileKey2} label={String(key).replace(/[_-]+/g, " ").replace(/\b\w/g, (m) => m.toUpperCase())} value={String(value || "—")} />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="mt-5 grid gap-4 sm:grid-cols-2">
+                <Detail icon={Wallet} label="Issuer wallet" value={certificate.issuerAddress || certificate.blockchainIssuer} mono />
+                <Detail icon={Link2} label="Smart contract" value={certificate.contractAddress} mono />
               </div>
 
               {state === "DISQUALIFIED" && certificate.disqualificationReason && (

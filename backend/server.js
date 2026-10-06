@@ -228,6 +228,9 @@ function publicCertificatePayload(body = {}) {
     disqualifiedBy: body.disqualifiedBy || null,
     disqualifiedAt: body.disqualifiedAt || null,
     certificateHash: body.certificateHash || null,
+    publicFields: body.publicFields && typeof body.publicFields === "object" && !Array.isArray(body.publicFields)
+      ? Object.fromEntries(Object.entries(body.publicFields).filter(([key]) => !/^email$/i.test(String(key))))
+      : {},
     updatedAt: new Date().toISOString(),
   };
 }
@@ -826,6 +829,9 @@ app.get("/api/public/verify/:certificateId", async (req, res) => {
     disqualifiedBy: metadata?.disqualifiedBy || null,
     disqualifiedAt: metadata?.disqualifiedAt || null,
     certificateHash: metadata?.certificateHash || null,
+    publicFields: metadata?.publicFields && typeof metadata.publicFields === "object" ? metadata.publicFields : {},
+    issuerAddress: chain?.issuer || metadata?.createdBy || null,
+    contractAddress: chain?.contractAddress || blockchainConfig().contractAddress || null,
   };
 
   return res.json({

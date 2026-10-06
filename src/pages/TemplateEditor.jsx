@@ -750,6 +750,54 @@ export default function TemplateEditor() {
     }
   };
 
+  const applyParagraphColorToHtml = (html, color) => {
+    if (!html) return html;
+    try {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(String(html), "text/html");
+      doc.body.querySelectorAll("*").forEach((node) => {
+        if (node.nodeType === Node.ELEMENT_NODE) {
+          node.style.color = color;
+        }
+      });
+      if (doc.body.childNodes.length) {
+        doc.body.style.color = color;
+      }
+      return sanitizeRichHtml(doc.body.innerHTML);
+    } catch {
+      return html;
+    }
+  };
+
+  const handleTextColorChange = (value) => {
+    const color = String(value || "").trim();
+    if (!/^#[0-9a-fA-F]{6}$/.test(color)) return;
+    setTextColor(color);
+    if (!selected || !isTextElement(selected)) return;
+
+    if (selected.paragraph) {
+      const next = elements.map((item) =>
+        item.id === selected.id
+          ? {
+              ...item,
+              fill: color,
+              html: applyParagraphColorToHtml(
+                item.html || escapeHtml(item.text || ""),
+                color
+              ),
+            }
+          : item
+      );
+      setElements(next);
+      const updated = next.find((item) => item.id === selected.id);
+      setTextContent(updated?.text || "");
+      pushSnapshot(next);
+      return;
+    }
+
+    updateSelectedText({ fill: color });
+  };
+
   const updateSelectedText = (patch) => {
     if (!selected || !isTextElement(selected)) return;
 
@@ -2171,12 +2219,12 @@ export default function TemplateEditor() {
                       <input
                         type="color"
                         value={textColor}
-                        onChange={(e) => setTextColor(e.target.value)}
+                        onChange={(e) => handleTextColorChange(e.target.value)}
                         className="h-10 w-14 rounded-lg border border-slate-200 bg-white p-1"
                       />
                       <input
                         value={textColor}
-                        onChange={(e) => setTextColor(e.target.value)}
+                        onChange={(e) => handleTextColorChange(e.target.value)}
                         className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-2.5 py-2 font-mono text-xs uppercase"
                       />
                     </div>

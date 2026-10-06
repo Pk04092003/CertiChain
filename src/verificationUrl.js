@@ -27,6 +27,13 @@ export function apiBaseUrl() {
 }
 
 function buildPublicPayload(record) {
+  const sourceData = record?.data && typeof record.data === "object" ? record.data : {};
+  const publicFields = Object.fromEntries(
+    Object.entries(sourceData)
+      .filter(([key]) => !/^email$/i.test(String(key)))
+      .map(([key, value]) => [String(key), value == null ? "" : String(value)])
+  );
+
   return {
     id: String(record.id),
     name: String(record?.data?.name || record?.data?.student_name || record?.data?.recipient_name || "Participant"),
@@ -50,6 +57,7 @@ function buildPublicPayload(record) {
     disqualifiedBy: record.disqualifiedBy || null,
     disqualifiedAt: record.disqualifiedAt || null,
     certificateHash: record.documentHash || null,
+    publicFields,
   };
 }
 
