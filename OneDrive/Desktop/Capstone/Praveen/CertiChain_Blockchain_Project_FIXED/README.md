@@ -1,4 +1,4 @@
-# CertiChain V79 — Vercel + Render + Resend deployment-ready
+# CertiChain V80 — Vercel + Render + Resend deployment-ready
 
 This version keeps the CertiChain certificate/template/verification feature set and uses Resend for production email delivery.
 
@@ -71,3 +71,11 @@ npm start
 ## Security
 
 Never commit `.env` files, MongoDB passwords, Resend API keys, or private keys. Keep secrets in Render/Vercel environment settings.
+
+
+## V80 email fix
+The bulk Email Participants page now imports and uses the shared verification URL helper correctly. This fixes the runtime error that prevented certificate emails from being prepared/sent.
+
+
+## Email prerequisite
+Resend shared test sender `onboarding@resend.dev` is for testing and cannot deliver to arbitrary participant addresses. Verify a domain you own in Resend and set `RESEND_FROM` to an address on that verified domain before sending certificates to participants.

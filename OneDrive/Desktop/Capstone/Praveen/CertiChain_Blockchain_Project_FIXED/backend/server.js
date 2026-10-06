@@ -99,8 +99,12 @@ function emailNotConfiguredMessage() {
 
 function normalizeError(error, fallback = 'Email delivery failed.') {
   const source = error?.error || error;
+  const rawMessage = String(source?.message || error?.message || fallback);
+  const message = /only send testing emails to your own email address/i.test(rawMessage)
+    ? `${rawMessage} Verify a domain in Resend and set RESEND_FROM to an address on that verified domain.`
+    : rawMessage;
   return {
-    message: String(source?.message || error?.message || fallback),
+    message,
     code: source?.name || error?.code || null,
     statusCode: Number.isFinite(Number(source?.statusCode)) ? Number(source.statusCode) : (Number.isFinite(Number(error?.statusCode)) ? Number(error.statusCode) : null),
     name: source?.name || null,
@@ -161,13 +165,17 @@ function buildResendPayload(message = {}, from) {
 
 app.get('/api/email/status', (_, res) => {
   const config = readEmailConfig();
+  const testSender = /@resend\.dev\s*>?$/i.test(config.from) || /<[^>]*@resend\.dev>/i.test(config.from);
   res.json({
     configured: config.configured,
     provider: 'Resend',
     from: config.from || null,
-    message: config.configured
-      ? 'Resend is configured and ready for certificate email delivery.'
-      : emailNotConfiguredMessage(),
+    testSender,
+    message: !config.configured
+      ? emailNotConfiguredMessage()
+      : testSender
+        ? 'Resend is configured, but onboarding@resend.dev is a test sender. It cannot be used to send to arbitrary participant addresses; verify a domain and send from that domain.'
+        : 'Resend is configured and ready for certificate email delivery.',
   });
 });
 
