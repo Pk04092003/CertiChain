@@ -79,3 +79,7 @@ The bulk Email Participants page now imports and uses the shared verification UR
 
 ## Email prerequisite
 Resend shared test sender `onboarding@resend.dev` is for testing and cannot deliver to arbitrary participant addresses. Verify a domain you own in Resend and set `RESEND_FROM` to an address on that verified domain before sending certificates to participants.
+
+
+## Vercel SPA routing
+For the Vercel project, set Root Directory to `OneDrive/Desktop/Capstone/Praveen/CertiChain_Blockchain_Project_FIXED` (the directory containing the workspace `package.json`). Use `npm run build` and `frontend/dist`. `cleanUrls` is disabled so React Router routes such as `/email-participants` and `/verify/<certificateId>` are rewritten to `index.html`.
