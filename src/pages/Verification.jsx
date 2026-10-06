@@ -129,6 +129,29 @@ export default function Verification() {
               </div>
             </section>
 
+            {certificate.documentUrl && (
+              <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-3 px-1">
+                  <div>
+                    <div className="text-xs font-semibold uppercase tracking-wider text-slate-400">Open Verified Certificate</div>
+                    <h2 className="mt-1 text-lg font-bold text-slate-900">Certificate document</h2>
+                    <p className="mt-1 text-xs text-slate-500">The verification seal is displayed directly over the certificate document.</p>
+                  </div>
+                  <span className={`rounded-full border px-3 py-1.5 text-xs font-extrabold tracking-wider ${config?.seal || "border-slate-200 bg-slate-50 text-slate-600"}`}>
+                    {config?.label || state}
+                  </span>
+                </div>
+                <div className="relative mx-auto aspect-[1.414/1] w-full max-w-5xl overflow-hidden rounded-2xl border border-slate-200 bg-slate-100 shadow-inner">
+                  <iframe title={`${certificate.id} certificate`} src={certificate.documentUrl} className="h-full w-full bg-white" />
+                  <div className={`cc-status-seal pointer-events-none right-[7%] top-[8%] ${state === "VERIFIED" ? "cc-status-seal-verified" : state === "DISQUALIFIED" ? "cc-status-seal-disqualified" : "cc-status-seal-revoked"}`}>
+                    <Icon size={29} strokeWidth={2.4} />
+                    <strong className="relative z-10 mt-1 text-[15px] font-black tracking-[0.14em]">{config?.label || state}</strong>
+                    <span className="relative z-10 mt-0.5 text-[8px] font-bold uppercase tracking-[0.18em]">CertiChain Status</span>
+                  </div>
+                </div>
+              </section>
+            )}
+
             <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
               <div className="flex items-start justify-between gap-4 border-b border-slate-100 pb-5">
                 <div>
@@ -161,7 +184,7 @@ export default function Verification() {
 
               <div className="mt-6 flex flex-wrap gap-3">
                 {certificate.documentUrl && (
-                  <a href={certificate.documentUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white"><ExternalLink size={16} /> Open certificate PDF</a>
+                  <a href={certificate.documentUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white"><ExternalLink size={16} /> Open Verified Certificate</a>
                 )}
                 <Link to="/verify" className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-5 py-3 text-sm font-semibold"><Search size={16} /> Verify another</Link>
               </div>

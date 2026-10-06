@@ -29,6 +29,7 @@ import { addAuditLog } from "../auditStore";
 import { authHeaders, getSessionUser } from "../authStore";
 import { certificateBytes32 } from "../blockchainService";
 import { automateNewCertificate, getVerificationUrl } from "../verificationUrl";
+import ActionResultModal from "../components/ActionResultModal";
 
 const EMAIL_KEY_FALLBACK = "email";
 
@@ -293,6 +294,7 @@ export default function BulkIssue() {
   const [bulkEmailState, setBulkEmailState] = useState({ status: "idle", sent: 0, failed: 0, total: 0 });
   const [emailStatus, setEmailStatus] = useState({});
   const [zipBusy, setZipBusy] = useState(false);
+  const [resultModal, setResultModal] = useState(null);
   const singleAutoEmailStartedRef = useRef(new Set());
   const bulkAutoEmailStartedRef = useRef(new Set());
 
@@ -501,7 +503,19 @@ export default function BulkIssue() {
       setSingleEmailState(sent ? "sent" : "error");
       setMessage(sent ? `Certificate ${record.id} was issued, secured on IPFS/blockchain, and emailed to ${email}.` : `Certificate ${record.id} was issued, but the email failed.`);
       if (sent) {
-        window.alert(`Certificate mailed successfully\n\nCertificate ID: ${record.id}\nRecipient: ${email}\nAttachment: PDF\nBlockchain: ${chain.exists ? "Registered" : "Not registered"}\nIPFS: ${ipfs.cid || chain.ipfsCid ? "Uploaded" : "Not uploaded"}`);
+        setResultModal({
+          tone: "success",
+          title: "Certificate issued & emailed",
+          message: "Everything is complete. The certificate is secured and the PDF has been sent successfully to the participant.",
+          certificateId: record.id,
+          recipient: email,
+          details: [
+            { label: "Blockchain", value: chain.exists ? "Registered on Sepolia" : "Not registered", tone: chain.exists ? "success" : "info" },
+            { label: "IPFS", value: ipfs.cid || chain.ipfsCid ? "Uploaded to Pinata" : "Not uploaded", tone: ipfs.cid || chain.ipfsCid ? "success" : "info" },
+            { label: "Email", value: "PDF sent successfully", tone: "success" },
+            { label: "Status", value: "VERIFIED", tone: "success" },
+          ],
+        });
       }
     } catch (error) {
       console.error(error);
@@ -909,9 +923,19 @@ export default function BulkIssue() {
           : `${sent} certificate email${sent === 1 ? "" : "s"} sent, ${failed} failed. Failed certificates remain in the registry for recovery.`
       );
       if (sent > 0) {
-        const mailedIds = ready.filter((item) => resultById.get(item.record.id)?.sent).map((item) => item.record.id);
-        const title = failed === 0 ? "Certificates mailed successfully" : "Certificates partially mailed";
-        window.alert(`${title}\n\nMailed: ${sent}\nFailed: ${failed}\nAttachment: PDF only\n\n${mailedIds.join("\n")}`);
+        setResultModal({
+          tone: failed === 0 ? "success" : "info",
+          title: failed === 0 ? "Certificates emailed successfully" : "Bulk email completed with some failures",
+          message: failed === 0
+            ? "All prepared certificate PDFs were delivered successfully."
+            : "Some messages were delivered and the failed certificates remain available for retry.",
+          details: [
+            { label: "Mailed", value: `${sent} certificate${sent === 1 ? "" : "s"}`, tone: "success" },
+            { label: "Failed", value: `${failed}`, tone: failed === 0 ? "success" : "info" },
+            { label: "Attachment", value: "PDF only", tone: "success" },
+            { label: "Delivery", value: "Gmail API", tone: "success" },
+          ],
+        });
       }
     } catch (error) {
       console.error(error);
@@ -1230,6 +1254,19 @@ export default function BulkIssue() {
           </div>
         )}
       </div>
+      <ActionResultModal
+        open={Boolean(resultModal)}
+        onClose={() => setResultModal(null)}
+        tone={resultModal?.tone || "success"}
+        title={resultModal?.title}
+        message={resultModal?.message}
+        certificateId={resultModal?.certificateId}
+        recipient={resultModal?.recipient}
+        details={resultModal?.details || []}
+        primaryLabel="Done"
+        secondaryLabel={resultModal?.certificateId ? "Open verification" : undefined}
+        onSecondary={resultModal?.certificateId ? () => { window.location.href = `/verify/${encodeURIComponent(resultModal.certificateId)}`; } : undefined}
+      />
     </Layout>
   );
 }
