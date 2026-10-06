@@ -64,6 +64,54 @@ export async function publishCertificateForPublicVerification(record) {
   }
 }
 
+export async function getPublicCertificate(certificateId) {
+  const id = String(certificateId || '').trim();
+  if (!id) return { ok: false, error: 'Certificate ID is required.' };
+  try {
+    const response = await fetch(`${apiBaseUrl()}/api/public/certificates/${encodeURIComponent(id)}`, {
+      headers: { Accept: 'application/json' },
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) return { ok: false, error: data?.error || 'Public verification record not found.', status: response.status };
+    return { ok: true, certificate: data?.certificate || null };
+  } catch (error) {
+    return { ok: false, error: error?.message || 'Public verification service unavailable.' };
+  }
+}
+
 export async function updatePublicCertificateStatus(record) {
-  return publishCertificateForPublicVerification(record);
+  if (!record?.id) return { ok: false, skipped: true };
+  try {
+    const payload = {
+      status: record.status || 'Issued',
+      blockchainStatus: record.blockchainStatus || 'Not registered',
+      transactionHash: record.transactionHash || null,
+      blockNumber: record.blockNumber || null,
+      ipfsCid: record.ipfsCid || null,
+      blockchainNetwork: record.blockchainNetwork || 'Ethereum Sepolia',
+      disqualificationReason: record.disqualificationReason || null,
+      disqualifiedBy: record.disqualifiedBy || null,
+      disqualifiedAt: record.disqualifiedAt || null,
+      certificateHash: record.documentHash || null,
+      createdByName: record.createdByName || 'Authorized Institution',
+      createdBy: record.createdBy || '',
+      name: String(record?.data?.name || record?.data?.student_name || record?.data?.recipient_name || record.name || 'Participant'),
+      course: String(record?.data?.course || record?.templateName || record.course || 'Certificate'),
+      templateName: String(record?.templateName || record.templateName || 'Certificate'),
+      issuedAt: record.issuedAt || null,
+    };
+    const response = await fetch(`${apiBaseUrl()}/api/public/certificates/${encodeURIComponent(String(record.id))}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (response.ok) return { ok: true, ...data };
+
+    // Older public records may not exist yet. POST creates them safely.
+    if (response.status === 404) return publishCertificateForPublicVerification(record);
+    return { ok: false, error: data?.error || 'Unable to update public verification record.', status: response.status };
+  } catch (error) {
+    return { ok: false, error: error?.message || 'Public verification sync failed.' };
+  }
 }

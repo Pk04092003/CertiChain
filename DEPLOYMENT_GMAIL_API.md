@@ -101,3 +101,19 @@ CertiChain uses only `https://www.googleapis.com/auth/gmail.send`. The callback 
 The Gmail API is used for certificate delivery. Certificate email messages contain a single PDF certificate attachment only.
 
 The application has one authenticated role: Admin. Certificate viewers do not create accounts. They use the public verification route by certificate ID or QR code. The QR target is the deployed HTTPS verification URL, which can be opened by a phone camera or Google Lens.
+## Durable public verification (V93)
+
+Render must have these additional environment variables:
+
+```text
+MONGODB_URI=<your existing MongoDB Atlas connection string>
+CERTICHAIN_MONGODB_DB=certichain
+CERTICHAIN_PUBLIC_COLLECTION=public_certificates
+```
+
+Do not commit the real `MONGODB_URI` to GitHub. Keep it only in Render Environment Variables.
+
+After deployment, verify the storage endpoint: `https://certichain-1-xc8l.onrender.com/api/public/health`. It should report `persistent: true` and `storage: "mongodb"`.
+
+For an older certificate that was already issued before V93, open its Admin certificate details page and click **Sync public verification** once.
+

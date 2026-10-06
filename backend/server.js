@@ -6,6 +6,7 @@ import express from "express";
 import cors from "cors";
 import { google } from 'googleapis';
 import crypto from 'node:crypto';
+import { MongoClient } from "mongodb";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -31,6 +32,36 @@ app.use(cors());
 app.use(express.json({ limit: "100mb" }));
 
 const port = Number(process.env.PORT || 5000);
+
+// Public verification records must survive Render restarts and redeploys.
+// MongoDB Atlas is the durable store in production; the local JSON store below
+// is kept only as a development fallback when MONGODB_URI is not configured.
+const mongoUri = String(process.env.MONGODB_URI || "").trim();
+const mongoDbName = String(process.env.CERTICHAIN_MONGODB_DB || "certichain").trim();
+const mongoCollectionName = String(process.env.CERTICHAIN_PUBLIC_COLLECTION || "public_certificates").trim();
+let mongoClient = null;
+let publicCollectionPromise = null;
+
+async function getPublicCollection() {
+  if (!mongoUri) return null;
+  if (!publicCollectionPromise) {
+    publicCollectionPromise = (async () => {
+      mongoClient = new MongoClient(mongoUri, { serverSelectionTimeoutMS: 8000 });
+      await mongoClient.connect();
+      const collection = mongoClient.db(mongoDbName).collection(mongoCollectionName);
+      await collection.createIndex({ id: 1 }, { unique: true });
+      console.log(`Public verification MongoDB connected: ${mongoDbName}.${mongoCollectionName}`);
+      return collection;
+    })().catch((error) => {
+      publicCollectionPromise = null;
+      try { mongoClient?.close(); } catch {}
+      mongoClient = null;
+      throw error;
+    });
+  }
+  return publicCollectionPromise;
+}
+
 const publicCertificatesDir = path.join(__dirname, "data");
 const publicCertificatesFile = path.join(publicCertificatesDir, "public-certificates.json");
 let publicCertificates = {};
@@ -74,6 +105,60 @@ function publicCertificatePayload(body = {}) {
     certificateHash: body.certificateHash || null,
     updatedAt: new Date().toISOString(),
   };
+}
+
+function publicCertificateForResponse(record) {
+  if (!record) return null;
+  const { _id, email, ...safe } = record;
+  return safe;
+}
+
+async function upsertPublicCertificate(payload) {
+  const collection = await getPublicCollection();
+  if (collection) {
+    const now = new Date().toISOString();
+    const document = { ...payload, updatedAt: now };
+    await collection.updateOne({ id: payload.id }, { $set: document }, { upsert: true });
+    return document;
+  }
+
+  if (process.env.RENDER === "true") {
+    const error = new Error("Public verification storage is not configured. Add MONGODB_URI to the Render service.");
+    error.statusCode = 503;
+    error.code = "PUBLIC_STORAGE_NOT_CONFIGURED";
+    throw error;
+  }
+
+  publicCertificates[payload.id] = payload;
+  await savePublicCertificates();
+  return payload;
+}
+
+async function findPublicCertificate(id) {
+  const target = String(id || "").trim();
+  if (!target) return null;
+  const collection = await getPublicCollection();
+  if (collection) {
+    return collection.findOne({ id: target }, { projection: { _id: 0 } });
+  }
+
+  if (process.env.RENDER === "true") {
+    const error = new Error("Public verification storage is not configured. Add MONGODB_URI to the Render service.");
+    error.statusCode = 503;
+    error.code = "PUBLIC_STORAGE_NOT_CONFIGURED";
+    throw error;
+  }
+
+  return publicCertificates[target] || null;
+}
+
+async function patchPublicCertificate(id, patch = {}) {
+  const target = String(id || "").trim();
+  if (!target) return null;
+  const existing = await findPublicCertificate(target);
+  if (!existing) return null;
+  const next = publicCertificatePayload({ ...existing, ...patch, id: target });
+  return upsertPublicCertificate(next);
 }
 
 function readEmailConfig() {
@@ -339,9 +424,82 @@ function filenameFallback(filename) {
   return value.replace(/\.png$/i,'') || null;
 }
 
+app.get('/api/public/health', async (_, res) => {
+  try {
+    const collection = await getPublicCollection();
+    return res.json({
+      ok: true,
+      persistent: Boolean(collection),
+      storage: collection ? 'mongodb' : 'local-development-only',
+      database: collection ? mongoDbName : null,
+      collection: collection ? mongoCollectionName : null,
+    });
+  } catch (error) {
+    console.error('Public verification health check failed:', error);
+    return res.status(503).json({ ok: false, persistent: false, error: error?.message || 'Public verification storage unavailable.' });
+  }
+});
+
+app.post('/api/public/certificates', async (req, res) => {
+  try {
+    const payload = publicCertificatePayload(req.body || {});
+    if (!payload) return res.status(400).json({ error: 'Certificate id is required.' });
+    const saved = await upsertPublicCertificate(payload);
+    return res.status(201).json({ ok: true, certificate: publicCertificateForResponse(saved) });
+  } catch (error) {
+    console.error('Public certificate publish failed:', error);
+    const status = Number(error?.statusCode || 500);
+    return res.status(status >= 400 && status < 600 ? status : 500).json({ error: error?.message || 'Unable to publish certificate for public verification.', errorCode: error?.code || null });
+  }
+});
+
+app.get('/api/public/certificates/:certificateId', async (req, res) => {
+  try {
+    const certificate = await findPublicCertificate(req.params.certificateId);
+    if (!certificate) return res.status(404).json({ error: 'Public verification record not found.' });
+    return res.json({ ok: true, certificate: publicCertificateForResponse(certificate) });
+  } catch (error) {
+    console.error('Public certificate lookup failed:', error);
+    const status = Number(error?.statusCode || 500);
+    return res.status(status >= 400 && status < 600 ? status : 500).json({ error: error?.message || 'Public verification service unavailable.', errorCode: error?.code || null });
+  }
+});
+
+app.patch('/api/public/certificates/:certificateId', async (req, res) => {
+  try {
+    const allowed = {
+      status: req.body?.status,
+      blockchainStatus: req.body?.blockchainStatus,
+      transactionHash: req.body?.transactionHash,
+      blockNumber: req.body?.blockNumber,
+      ipfsCid: req.body?.ipfsCid,
+      blockchainNetwork: req.body?.blockchainNetwork,
+      disqualificationReason: req.body?.disqualificationReason,
+      disqualifiedBy: req.body?.disqualifiedBy,
+      disqualifiedAt: req.body?.disqualifiedAt,
+      certificateHash: req.body?.certificateHash,
+      createdByName: req.body?.createdByName,
+      createdBy: req.body?.createdBy,
+      name: req.body?.name,
+      course: req.body?.course,
+      templateName: req.body?.templateName,
+      issuedAt: req.body?.issuedAt,
+    };
+    const cleanPatch = Object.fromEntries(Object.entries(allowed).filter(([, value]) => value !== undefined));
+    const saved = await patchPublicCertificate(req.params.certificateId, cleanPatch);
+    if (!saved) return res.status(404).json({ error: 'Public verification record not found.' });
+    return res.json({ ok: true, certificate: publicCertificateForResponse(saved) });
+  } catch (error) {
+    console.error('Public certificate update failed:', error);
+    const status = Number(error?.statusCode || 500);
+    return res.status(status >= 400 && status < 600 ? status : 500).json({ error: error?.message || 'Unable to update public verification record.', errorCode: error?.code || null });
+  }
+});
+
 app.get('/api/email/status', async (_, res) => {
   const config = readEmailConfig();
   let connected = false, error = null, scopeGranted = false;
+  console.log(mongoUri ? `Public verification storage: MongoDB ${mongoDbName}.${mongoCollectionName}` : 'Public verification storage: local development fallback (set MONGODB_URI for production).');
   if (config.connected) {
     try {
       const info = await gmailAuthorizationInfo();

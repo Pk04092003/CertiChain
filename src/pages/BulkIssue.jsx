@@ -356,7 +356,7 @@ export default function BulkIssue() {
 
   const persistRecords = (records) => upsertIssuedCertificates(records);
 
-  const generateSingle = () => {
+  const generateSingle = async () => {
     if (!selectedTemplate) {
       setMessage("Select a saved template before issuing a certificate.");
       return;
@@ -410,11 +410,19 @@ export default function BulkIssue() {
 
     try {
       persistRecords([record]);
-      void publishCertificateForPublicVerification(record);
+      const publication = await publishCertificateForPublicVerification(record);
+      if (publication.ok) {
+        updateIssuedCertificate(record.id, { publicVerificationStatus: "Published", publicVerificationUpdatedAt: new Date().toISOString(), publicVerificationError: null });
+      } else {
+        updateIssuedCertificate(record.id, { publicVerificationStatus: "Pending", publicVerificationError: publication.error || "Unable to publish public verification record." });
+        addAuditLog("Public verification publish failed", { certificateId: record.id, error: publication.error || null });
+      }
       setGeneratedId(id);
-        setEmailStatus({ [id]: "Preparing…" });
+      setEmailStatus({ [id]: "Preparing…" });
       setSingleEmailState("sending");
-      setMessage(`Certificate ${id} was issued successfully. Sending it to ${enteredEmail}…`);
+      setMessage(publication.ok
+        ? `Certificate ${id} was issued successfully. Sending it to ${enteredEmail}…`
+        : `Certificate ${id} was issued and email delivery will continue, but public verification could not be synchronized yet. Open the certificate record and use Sync public verification before sharing the QR.`);
     } catch (error) {
       setMessage(error?.message || "Unable to save the issued certificate.");
     }
@@ -589,7 +597,7 @@ export default function BulkIssue() {
     return displayData;
   };
 
-  const issueBulk = () => {
+  const issueBulk = async () => {
     if (!selectedTemplate) {
       setMessage("Select a saved template before issuing bulk certificates.");
       return;
@@ -676,9 +684,20 @@ export default function BulkIssue() {
       // (especially one containing images) is stored once rather than once per
       // CSV row. This keeps bulk issuance reliable for larger CSV files.
       persistRecords(issuedRecords);
-      // Mirror non-sensitive certificate metadata to the public verification registry.
-      // A sync failure never blocks issuance; the QR remains valid and can be synced again later.
-      void Promise.allSettled(issuedRecords.map((record) => publishCertificateForPublicVerification(record)));
+      // Publish every newly issued certificate before the bulk-email state is opened.
+      // This removes the race where email delivery could start while the public QR
+      // record was still missing from the verification database.
+      const publicationResults = await Promise.all(issuedRecords.map((record) => publishCertificateForPublicVerification(record)));
+      publicationResults.forEach((result, index) => {
+        const record = issuedRecords[index];
+        updateIssuedCertificate(record.id, result.ok
+          ? { publicVerificationStatus: "Published", publicVerificationUpdatedAt: new Date().toISOString(), publicVerificationError: null }
+          : { publicVerificationStatus: "Pending", publicVerificationError: result.error || "Unable to publish public verification record." });
+      });
+      const publicationFailures = publicationResults.filter((result) => !result.ok);
+      if (publicationFailures.length) {
+        addAuditLog('Bulk public verification publish partially failed', { count: publicationFailures.length, certificateIds: issuedRecords.filter((_, index) => !publicationResults[index]?.ok).map((record) => record.id) });
+      }
       addAuditLog('Bulk certificates issued', { count: issuedRecords.length, template: selectedTemplate.name, certificateIds: issuedRecords.map((record) => record.id) });
 
       setIssuedBulkRecords(issuedRecords);
@@ -686,7 +705,9 @@ export default function BulkIssue() {
       setBulkIssued(true);
       setBulkEmailState({ status: "idle", sent: 0, failed: 0, total: issuedRecords.length });
       setMessage(
-        `${issuedRecords.length} certificates were created successfully using "${selectedTemplate.name}". Automatic email delivery is starting now. Email status will be recorded for each certificate.`
+        publicationFailures.length
+          ? `${issuedRecords.length} certificates were created. ${publicationFailures.length} public verification record${publicationFailures.length === 1 ? "" : "s"} could not be synchronized yet; email delivery is still starting now.`
+          : `${issuedRecords.length} certificates were created and published for public QR verification. Automatic email delivery is starting now.`
       );
     } catch (error) {
       console.error("Bulk certificate issuance failed:", error);

@@ -80,3 +80,8 @@ The Gmail integration intentionally uses only `https://www.googleapis.com/auth/g
 - **New certificates:** single and bulk certificates are automatically emailed at issuance time.
 - **Email attachment:** certificate emails contain **PDF only**. PNG is not attached to email.
 - **Old certificates:** they are never emailed automatically. Select the old certificates from **Issued Certificates** → **Email selected** → send the PDF certificates.
+
+## V93 public verification storage
+
+Public QR/certificate-ID verification is stored in MongoDB Atlas so a viewer can verify a certificate from another device without access to the Admin browser. Configure `MONGODB_URI`, `CERTICHAIN_MONGODB_DB` (default `certichain`) and `CERTICHAIN_PUBLIC_COLLECTION` (default `public_certificates`) on Render. Older certificates issued before this durable registry existed can be synchronized from **Certificate details → Sync public verification**.
+
