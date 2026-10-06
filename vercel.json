@@ -10,7 +10,6 @@
     { "source": "/templates/:id/edit", "destination": "/index.html" },
     { "source": "/issue-certificate", "destination": "/index.html" },
     { "source": "/email-participants", "destination": "/index.html" },
-    { "source": "/email-certificate/:id", "destination": "/index.html" },
     { "source": "/bulk-issue", "destination": "/index.html" },
     { "source": "/generate", "destination": "/index.html" },
     { "source": "/certificates", "destination": "/index.html" },

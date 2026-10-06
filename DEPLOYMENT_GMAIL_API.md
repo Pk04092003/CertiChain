@@ -95,3 +95,9 @@ This version uses a signed HttpOnly OAuth-state cookie instead of an in-memory s
 ## Important Gmail scope fix
 
 CertiChain uses only `https://www.googleapis.com/auth/gmail.send`. The callback and connection-status checks no longer call the Gmail profile endpoint, because that endpoint requires broader Gmail permissions. The sender is taken from `GMAIL_SENDER_EMAIL`, and the backend validates that the stored OAuth token includes the Gmail Send scope. In Google Cloud Console, ensure the OAuth app's Data Access includes the Gmail Send scope. After a scope change, start a fresh connection from `/api/email/google/auth` and replace `GMAIL_REFRESH_TOKEN` in Render with the newly returned token.
+
+
+### V92 application workflow
+The Gmail API is used for certificate delivery. Certificate email messages contain a single PDF certificate attachment only.
+
+The application has one authenticated role: Admin. Certificate viewers do not create accounts. They use the public verification route by certificate ID or QR code. The QR target is the deployed HTTPS verification URL, which can be opened by a phone camera or Google Lens.

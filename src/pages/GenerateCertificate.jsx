@@ -80,8 +80,8 @@ export default function GenerateCertificate() {
 
       <section className="rounded-2xl border border-slate-200 bg-slate-100 p-4 shadow-sm sm:p-6">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <div><h2 className="font-bold text-slate-900">Live certificate preview</h2><p className="text-xs text-slate-500">The QR target uses the certificate ID and public verification route.</p></div>
-          <div className="flex gap-2"><button onClick={downloadPng} className="flex items-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white"><Download size={16}/> PNG</button><Link to={`/verify/${id}`} className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700">Verify</Link></div>
+          <div><h2 className="font-bold text-slate-900">Live certificate preview</h2><p className="text-xs text-slate-500">The QR code contains the public HTTPS verification URL. Viewers can scan it with a phone camera or Google Lens without logging in.</p></div>
+          <div className="flex gap-2"><button onClick={downloadPng} className="flex items-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white"><Download size={16}/> PNG (download)</button><Link to={`/verify/${id}`} className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700">Verify</Link></div>
         </div>
         <div ref={previewRef} className="rounded-3xl bg-slate-100 p-2 sm:p-4">
           <CertificatePreview certificateId={id} name={form.name || "Recipient"} course={form.course || "Course"} grade={form.grade || "—"} orientation={orientation}/>

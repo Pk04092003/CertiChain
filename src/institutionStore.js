@@ -7,7 +7,7 @@ const DEFAULT_SETTINGS = {
   phone: "",
   address: "",
   authorizedName: "Authorized Institution",
-  designation: "Certificate Issuer",
+  designation: "Administrator",
   logoDataUrl: "",
   signatureDataUrl: "",
   certificateNumbering: {

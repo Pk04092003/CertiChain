@@ -1,7 +1,7 @@
 import { NavLink, Link, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard, FileText, UploadCloud, ShieldCheck, Settings, LogOut, Menu, X,
-  Mail, BarChart3, ClipboardList, UserRound,
+  BarChart3, ClipboardList, UserRound,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { getSessionUser, logout } from "../authStore";
@@ -10,7 +10,6 @@ const items = [
   ["/dashboard", "Dashboard", LayoutDashboard],
   ["/templates", "Templates", FileText],
   ["/issue-certificate", "Issue Certificate", UploadCloud],
-  ["/email-participants", "Email Participants", Mail],
   ["/certificates", "Issued Certificates", ShieldCheck],
   ["/analytics", "Analytics", BarChart3],
   ["/audit-logs", "Audit Logs", ClipboardList],
@@ -21,14 +20,14 @@ export default function Layout({ children, title = "Dashboard", subtitle = "Inst
   const [open, setOpen] = useState(false);
   const session = getSessionUser();
   const [authorized, setAuthorized] = useState(Boolean(session));
-  const [user, setUser] = useState(session || { name: "Certificate Issuer", email: "Local session", role: "Issuer" });
+  const [user, setUser] = useState(session || { name: "CertiChain Admin", email: "Local session", role: "Admin" });
   const navigate = useNavigate();
 
   useEffect(() => {
     const refresh = () => {
       const current = getSessionUser();
       setAuthorized(Boolean(current));
-      setUser(current || { name: "Certificate Issuer", email: "Local session", role: "Issuer" });
+      setUser(current || { name: "CertiChain Admin", email: "Local session", role: "Admin" });
       if (!current) navigate("/login", { replace: true });
     };
     if (!getSessionUser()) navigate("/login", { replace: true });
@@ -49,7 +48,7 @@ export default function Layout({ children, title = "Dashboard", subtitle = "Inst
         <div className="flex h-20 items-center gap-3 border-b border-slate-100 px-5">
           <Link to="/dashboard" className="flex min-w-0 items-center gap-3">
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white"><ShieldCheck size={22} /></span>
-            <span className="min-w-0"><b className="block truncate text-sm text-slate-900">CertiChain</b><small className="block truncate text-xs text-slate-400">Institution Portal</small></span>
+            <span className="min-w-0"><b className="block truncate text-sm text-slate-900">CertiChain</b><small className="block truncate text-xs text-slate-400">Admin Portal</small></span>
           </Link>
         </div>
         <nav className="space-y-1 overflow-y-auto p-4 pb-24">

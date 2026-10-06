@@ -1,27 +1,56 @@
 export const USERS_KEY = "certichain-users";
 export const SESSION_KEY = "certichain-session-user";
 
-const DEFAULT_USERS = [
-  { id: "USR-ADMIN", name: "CertiChain Admin", email: "admin@certichain.local", role: "Institution Admin", password: "admin123" },
-  { id: "USR-ISSUER", name: "Certificate Issuer", email: "issuer@certichain.local", role: "Issuer", password: "issuer123" },
-  { id: "USR-VIEWER", name: "Verification Viewer", email: "viewer@certichain.local", role: "Viewer", password: "viewer123" },
-];
+const DEFAULT_ADMIN = {
+  id: "USR-ADMIN",
+  name: "CertiChain Admin",
+  email: "admin@certichain.local",
+  role: "Admin",
+  password: "admin123",
+};
+
+function normaliseUsers(users) {
+  const admin =
+    (Array.isArray(users) ? users : []).find((item) => String(item?.role || "").toLowerCase() === "admin") ||
+    (Array.isArray(users) ? users : []).find((item) => String(item?.role || "").toLowerCase() === "institution admin");
+
+  return [{
+    ...DEFAULT_ADMIN,
+    ...(admin || {}),
+    role: "Admin",
+  }];
+}
 
 export function loadUsers() {
   try {
     const data = JSON.parse(localStorage.getItem(USERS_KEY) || "null");
-    if (Array.isArray(data) && data.length) return data;
+    const migrated = normaliseUsers(data);
+    localStorage.setItem(USERS_KEY, JSON.stringify(migrated));
+    return migrated;
   } catch {
-    // Use defaults below.
+    const defaults = [DEFAULT_ADMIN];
+    localStorage.setItem(USERS_KEY, JSON.stringify(defaults));
+    return defaults;
   }
-  localStorage.setItem(USERS_KEY, JSON.stringify(DEFAULT_USERS));
-  return DEFAULT_USERS;
 }
 
 export function login(email, password) {
-  const user = loadUsers().find((item) => item.email.toLowerCase() === String(email).trim().toLowerCase() && item.password === password);
-  if (!user) throw new Error("Invalid email or password.");
-  const session = { id: user.id, name: user.name, email: user.email, role: user.role };
+  const user = loadUsers().find(
+    (item) =>
+      item.email.toLowerCase() === String(email).trim().toLowerCase() &&
+      item.password === password &&
+      item.role === "Admin"
+  );
+
+  if (!user) throw new Error("Invalid admin email or password.");
+
+  const session = {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    role: "Admin",
+  };
+
   localStorage.setItem(SESSION_KEY, JSON.stringify(session));
   localStorage.setItem("certichain-current-issuer", session.email);
   window.dispatchEvent(new CustomEvent("certichain:auth-updated"));
@@ -31,9 +60,13 @@ export function login(email, password) {
 export function getSessionUser() {
   try {
     const session = JSON.parse(localStorage.getItem(SESSION_KEY) || "null");
-    if (session?.email) return session;
+    if (session?.email && session?.role === "Admin") return session;
+
+    // Remove legacy Issuer/Viewer sessions so they cannot continue to access
+    // administrator pages after the role model migration.
+    if (session) localStorage.removeItem(SESSION_KEY);
   } catch {
-    // fallback below
+    localStorage.removeItem(SESSION_KEY);
   }
   return null;
 }
@@ -44,10 +77,32 @@ export function logout() {
 }
 
 export function saveUser(user) {
-  const users = loadUsers();
-  const next = users.some((item) => item.id === user.id)
-    ? users.map((item) => item.id === user.id ? { ...item, ...user } : item)
-    : [...users, user];
-  localStorage.setItem(USERS_KEY, JSON.stringify(next));
-  return next;
+  const current = loadUsers()[0];
+  const merged = {
+    ...current,
+    ...(user || {}),
+    id: current.id,
+    role: "Admin",
+  };
+  localStorage.setItem(USERS_KEY, JSON.stringify([merged]));
+
+  const session = getSessionUser();
+  if (session?.id === merged.id) {
+    localStorage.setItem(
+      SESSION_KEY,
+      JSON.stringify({
+        id: merged.id,
+        name: merged.name,
+        email: merged.email,
+        role: "Admin",
+      })
+    );
+    window.dispatchEvent(new CustomEvent("certichain:auth-updated"));
+  }
+
+  return [merged];
+}
+
+export function getDefaultAdmin() {
+  return { ...DEFAULT_ADMIN };
 }

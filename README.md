@@ -70,3 +70,13 @@ The Gmail integration intentionally uses only `https://www.googleapis.com/auth/g
 - Existing/old certificates are never emailed automatically as a side effect of issuing new certificates.
 - To email an old certificate, open **Issued Certificates**, select one or more records, click **Email selected**, review the email template, and click **Send selected certificates**.
 - Failed automatic deliveries remain in the immutable registry with their delivery status and can be selected later for retry.
+
+
+## V92 Workflow and roles
+
+- **Admin account only:** only the administrator signs in to create templates, issue certificates, manage settings, and send previously issued certificates.
+- **Viewer:** no account, no login, no registration. A viewer enters a certificate ID or scans the certificate QR code.
+- **QR verification:** the QR code contains the public CertiChain HTTPS verification URL, so a phone camera or Google Lens can open `/verify/<certificateId>`.
+- **New certificates:** single and bulk certificates are automatically emailed at issuance time.
+- **Email attachment:** certificate emails contain **PDF only**. PNG is not attached to email.
+- **Old certificates:** they are never emailed automatically. Select the old certificates from **Issued Certificates** → **Email selected** → send the PDF certificates.

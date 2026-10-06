@@ -254,6 +254,61 @@ function buildGmailRawMessage(message, senderEmail, fromName='CertiChain') {
   return Buffer.from(lines.join('\r\n'),'utf8').toString('base64').replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/g,'');
 }
 
+
+function normalizeCertificateEmailMessage(message = {}) {
+  const next = { ...message };
+  const attachments = [];
+
+  const topLevelContentType = String(next.contentType || "").toLowerCase().trim();
+  const topLevelContent = String(next.contentBase64 || "").replace(/\s/g, "");
+  if (topLevelContent && topLevelContentType === "application/pdf") {
+    attachments.push({
+      filename: String(next.filename || "certificate.pdf").toLowerCase().endsWith(".pdf")
+        ? String(next.filename || "certificate.pdf")
+        : "certificate.pdf",
+      contentType: "application/pdf",
+      contentBase64: topLevelContent,
+    });
+  }
+
+  for (const item of Array.isArray(next.attachments) ? next.attachments : []) {
+    const type = String(item?.contentType || "").toLowerCase().trim();
+    const content = String(item?.contentBase64 || "").replace(/\s/g, "");
+    if (type === "application/pdf" && content) {
+      attachments.push({
+        filename: String(item?.filename || "certificate.pdf").toLowerCase().endsWith(".pdf")
+          ? String(item?.filename || "certificate.pdf")
+          : "certificate.pdf",
+        contentType: "application/pdf",
+        contentBase64: content,
+      });
+    }
+  }
+
+  const deduped = [];
+  const seen = new Set();
+  for (const item of attachments) {
+    const key = `${item.filename}:${item.contentBase64.slice(0, 48)}:${item.contentBase64.length}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(item);
+  }
+
+  delete next.contentBase64;
+  delete next.contentType;
+  delete next.filename;
+  next.attachments = deduped;
+
+  if (!next.attachments.length) {
+    const error = new Error("A PDF certificate attachment is required.");
+    error.code = "PDF_ATTACHMENT_REQUIRED";
+    error.statusCode = 400;
+    throw error;
+  }
+
+  return next;
+}
+
 async function sendGmailMessage(message, maxAttempts=3) {
   const config = readEmailConfig();
   if (!config.connected) { const e = new Error('Gmail is not connected. Configure Google OAuth, authorize the sender account, and add GMAIL_REFRESH_TOKEN to Render.'); e.code='GMAIL_NOT_CONNECTED'; e.statusCode=503; throw e; }
@@ -380,7 +435,7 @@ app.post('/api/email/certificates/bulk', async (req,res) => {
   try {
     const messages=Array.isArray(req.body?.messages)?req.body.messages:[];
     if(!messages.length) return res.status(400).json({error:'messages must contain at least one certificate email.'});
-    const outcomes=await Promise.allSettled(messages.map(message=>sendGmailMessage(message)));
+    const outcomes=await Promise.allSettled(messages.map(message=>sendGmailMessage(normalizeCertificateEmailMessage(message))));
     const results=outcomes.map((outcome,index)=>{
       const message=messages[index]||{};
       const certificateId=String(message?.certificateId||filenameFallback(message?.filename)||`certificate-${index+1}`);
@@ -399,7 +454,7 @@ app.post('/api/email/certificates/bulk', async (req,res) => {
 
 app.post('/api/email/certificate', async (req,res) => {
   try {
-    const data=await sendGmailMessage(req.body||{});
+    const data=await sendGmailMessage(normalizeCertificateEmailMessage(req.body||{}));
     return res.json({sent:true,messageId:data?.id||null,threadId:data?.threadId||null});
   } catch(e) {
     console.error(`Gmail certificate email failed for ${req.body?.to||'unknown recipient'}:`,e);
@@ -415,7 +470,6 @@ app.listen(port, '0.0.0.0', async () => {
   console.log(config.configured ? 'Gmail OAuth configuration present.' : 'Gmail OAuth not configured yet.');
   if (config.connected) {
     try {
-      const profile = await gmailProfile();
       const info = await gmailAuthorizationInfo();
       if (info?.hasGmailSendScope) console.log(`Gmail API connected. Sender: ${config.senderEmail || info.email || 'configured sender'}`);
       else console.error('Gmail refresh token is missing the gmail.send scope.');

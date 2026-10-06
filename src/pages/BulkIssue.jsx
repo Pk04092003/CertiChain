@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { toPng } from "html-to-image";
+import { certificatePngToPdf } from "../certificateExport";
 import { upsertIssuedCertificates, getCurrentIssuer, updateIssuedCertificate, loadIssuedCertificates } from "../certificateStore";
 import { getNextCertificateNumber, loadInstitutionSettings, renderEmailTemplate } from "../institutionStore";
 import { addAuditLog } from "../auditStore";
@@ -143,14 +144,6 @@ async function captureCertificate(container) {
   });
 }
 
-function dataUrlToAttachment(dataUrl) {
-  const match = String(dataUrl || "").match(/^data:([^;,]+)?;base64,(.+)$/);
-  if (!match) throw new Error("Certificate image could not be prepared for email.");
-  return {
-    contentType: match[1] || "image/png",
-    contentBase64: match[2],
-  };
-}
 
 async function getEmailServerStatus() {
   const controller = new AbortController();
@@ -170,8 +163,14 @@ async function getEmailServerStatus() {
   }
 }
 
-async function sendCertificateEmail({ record, dataUrl, verificationUrl }) {
-  const attachment = dataUrlToAttachment(dataUrl);
+async function sendCertificateEmail({ record, dataUrl, verificationUrl, orientation }) {
+  const png = dataUrl;
+  const pdf = await certificatePngToPdf(png, orientation || record?.template?.page?.orientation || "landscape");
+  const pdfArray = new Uint8Array(await pdf.arrayBuffer());
+  let binary = "";
+  for (let i = 0; i < pdfArray.length; i += 1) binary += String.fromCharCode(pdfArray[i]);
+  const pdfBase64 = btoa(binary);
+
   const recipientName =
     valueForVariable(record.data, "name") ||
     valueForVariable(record.data, "student_name") ||
@@ -198,14 +197,15 @@ async function sendCertificateEmail({ record, dataUrl, verificationUrl }) {
           <p>Hello ${safeName},</p>
           <p>Your certificate for <strong>${safeCourse}</strong> has been issued through CertiChain.</p>
           <p><strong>Certificate ID:</strong> ${safeId}</p>
-          <p>You will find the certificate attached to this email.</p>
+          <p>You will find the PDF certificate attached to this email.</p>
           <p><a href="${safeVerificationUrl}" target="_blank" rel="noreferrer">Open public verification page</a></p>
           <p style="color:#64748b;font-size:12px">This email was sent by CertiChain.</p>
         </div>
       `,
-      filename: `${record.id}.png`,
-      contentType: attachment.contentType,
-      contentBase64: attachment.contentBase64,
+      filename: `${record.id}.pdf`,
+      contentType: "application/pdf",
+      contentBase64: pdfBase64,
+      attachments: [],
     }),
   });
 
@@ -459,7 +459,7 @@ export default function BulkIssue() {
       }
       const dataUrl = await captureCertificate(previewRef.current);
       const verificationUrl = getVerificationUrl(record.id);
-      const result = await sendCertificateEmail({ record, dataUrl, verificationUrl });
+      const result = await sendCertificateEmail({ record, dataUrl, verificationUrl, orientation: record?.template?.page?.orientation });
       const sent = Boolean(result.sent);
       updateRecordEmailStatus(record.id, sent ? "Sent" : "Failed", {
         email,
@@ -784,8 +784,12 @@ export default function BulkIssue() {
           const container = bulkPreviewRefs.current[record.id];
           if (!container) throw new Error("Certificate preview is not available.");
           const dataUrl = await captureCertificate(container);
+          const pdf = await certificatePngToPdf(dataUrl, record?.template?.page?.orientation || "landscape");
+          const pdfArray = new Uint8Array(await pdf.arrayBuffer());
+          let binary = "";
+          for (let i = 0; i < pdfArray.length; i += 1) binary += String.fromCharCode(pdfArray[i]);
+          const pdfBase64 = btoa(binary);
           const verificationUrl = getVerificationUrl(record.id);
-          const attachment = dataUrlToAttachment(dataUrl);
           const recipientName = valueForVariable(record.data, "name") || valueForVariable(record.data, "student_name") || valueForVariable(record.data, "recipient_name") || "Participant";
           const course = valueForVariable(record.data, "course") || record.templateName;
           return {
@@ -794,10 +798,11 @@ export default function BulkIssue() {
             message: {
               to: record.email,
               subject: `Certificate issued — ${recipientName}`,
-              html: `<div style="font-family:Arial,sans-serif;line-height:1.6;color:#0f172a"><h2 style="margin:0 0 12px">Your certificate has been issued</h2><p>Hello ${escapeText(recipientName)},</p><p>Your certificate for <strong>${escapeText(course)}</strong> has been issued through CertiChain.</p><p><strong>Certificate ID:</strong> ${escapeText(record.id)}</p><p>You will find the certificate attached to this email.</p><p><a href="${escapeText(verificationUrl)}" target="_blank" rel="noreferrer">Open public verification page</a></p><p style="color:#64748b;font-size:12px">This email was sent by CertiChain.</p></div>`,
-              filename: `${record.id}.png`,
-              contentType: attachment.contentType,
-              contentBase64: attachment.contentBase64,
+              html: `<div style="font-family:Arial,sans-serif;line-height:1.6;color:#0f172a"><h2 style="margin:0 0 12px">Your certificate has been issued</h2><p>Hello ${escapeText(recipientName)},</p><p>Your certificate for <strong>${escapeText(course)}</strong> has been issued through CertiChain.</p><p><strong>Certificate ID:</strong> ${escapeText(record.id)}</p><p>You will find the PDF certificate attached to this email.</p><p><a href="${escapeText(verificationUrl)}" target="_blank" rel="noreferrer">Open public verification page</a></p><p style="color:#64748b;font-size:12px">This email was sent by CertiChain.</p></div>`,
+              filename: `${record.id}.pdf`,
+              contentType: "application/pdf",
+              contentBase64: pdfBase64,
+              attachments: [],
               certificateId: record.id,
             },
           };
@@ -991,7 +996,7 @@ export default function BulkIssue() {
             <div>
               <div className="text-xs font-semibold uppercase tracking-wider text-blue-600">Certificate issuance</div>
               <h2 className="mt-1 text-2xl font-bold text-slate-900">Issue Certificate</h2>
-              <p className="mt-1 text-sm text-slate-500">Create a certificate and automatically email it to the participant. Bulk certificates are also emailed automatically after issuance.</p>
+              <p className="mt-1 text-sm text-slate-500">Create a certificate and automatically email the PDF to the participant. Bulk certificates are also emailed automatically after issuance.</p>
             </div>
 
             <div className="grid w-full max-w-xl grid-cols-2 gap-2 rounded-xl bg-slate-100 p-1">
