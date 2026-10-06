@@ -33,7 +33,11 @@ export async function publishCertificateForPublicVerification(record) {
     course: String(record?.data?.course || record?.templateName || "Certificate"),
     templateName: String(record?.templateName || "Certificate"),
     issuedAt: record.issuedAt || null,
-    status: record.status || "Issued",
+    status: record.blockchainRevoked || record.status === "Revoked" ? "Revoked" : (record.status || "Issued"),
+    verificationStatus: record.blockchainRevoked || record.status === "Revoked" ? "Revoked" : (record.status === "Disqualified" ? "Disqualified" : "Verified"),
+    blockchainRevoked: Boolean(record.blockchainRevoked),
+    blockchainRevokedAt: record.blockchainRevokedAt || null,
+    revocationReason: record.revocationReason || null,
     createdByName: record.createdByName || "Authorized Institution",
     createdBy: record.createdBy || "",
     blockchainStatus: record.blockchainStatus || "Not registered",
@@ -46,22 +50,26 @@ export async function publishCertificateForPublicVerification(record) {
     disqualifiedAt: record.disqualifiedAt || null,
     certificateHash: record.documentHash || null,
   };
-  try {
-    const controller = new AbortController();
-    const timer = window.setTimeout(() => controller.abort(), 6000);
-    const response = await fetch(`${apiBaseUrl()}/api/public/certificates`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-      signal: controller.signal,
-    });
-    window.clearTimeout(timer);
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(data?.error || "Unable to publish certificate for public verification.");
-    return { ok: true, ...data };
-  } catch (error) {
-    return { ok: false, error: error?.name === "AbortError" ? "Public verification server timed out." : (error?.message || "Public verification sync failed.") };
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const controller = new AbortController();
+      const timer = window.setTimeout(() => controller.abort(), 8000);
+      const response = await fetch(`${apiBaseUrl()}/api/public/certificates`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      });
+      window.clearTimeout(timer);
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data?.error || "Unable to publish certificate for public verification.");
+      return { ok: true, ...data };
+    } catch (error) {
+      if (attempt === 1) return { ok: false, error: error?.name === "AbortError" ? "Public verification server timed out." : (error?.message || "Public verification sync failed.") };
+      await new Promise((resolve) => window.setTimeout(resolve, 1200));
+    }
   }
+  return { ok: false, error: "Public verification sync failed." };
 }
 
 export async function getPublicCertificate(certificateId) {
@@ -83,7 +91,11 @@ export async function updatePublicCertificateStatus(record) {
   if (!record?.id) return { ok: false, skipped: true };
   try {
     const payload = {
-      status: record.status || 'Issued',
+      status: record.blockchainRevoked || record.status === 'Revoked' ? 'Revoked' : (record.status || 'Issued'),
+      verificationStatus: record.blockchainRevoked || record.status === 'Revoked' ? 'Revoked' : (record.status === 'Disqualified' ? 'Disqualified' : 'Verified'),
+      blockchainRevoked: Boolean(record.blockchainRevoked),
+      blockchainRevokedAt: record.blockchainRevokedAt || null,
+      revocationReason: record.revocationReason || null,
       blockchainStatus: record.blockchainStatus || 'Not registered',
       transactionHash: record.transactionHash || null,
       blockNumber: record.blockNumber || null,

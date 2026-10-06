@@ -196,6 +196,12 @@ export default function TemplateCertificatePreview({
   const border = template?.border || {};
 
   const verificationUrl = getVerificationUrl(certificateId);
+  const renderForm = useMemo(() => ({
+    ...(form || {}),
+    certificate_id: certificateId,
+    certificateId,
+    id: certificateId,
+  }), [form, certificateId]);
 
   const renderedElements = useMemo(
     () =>
@@ -273,8 +279,8 @@ export default function TemplateCertificatePreview({
           if (item.kind === "text") {
             const richHtml =
               item.paragraph && item.html
-                ? replaceVariablesInHtml(sanitizeHtml(item.html), form)
-                : replaceVariables(item.text || "", form).replace(
+                ? replaceVariablesInHtml(sanitizeHtml(item.html), renderForm)
+                : replaceVariables(item.text || "", renderForm).replace(
                     /\n/g,
                     "<br />"
                   );
@@ -427,6 +433,29 @@ export default function TemplateCertificatePreview({
 
           return null;
         })}
+
+        <div
+          data-certificate-id="true"
+          className="pointer-events-none absolute"
+          style={{
+            left: `${Math.max(22, page.width * 0.055)}px`,
+            bottom: `${Math.max(16, page.height * 0.045)}px`,
+            right: `${Math.max(22, page.width * 0.055)}px`,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 250,
+            fontFamily: "Arial, sans-serif",
+            fontSize: `${Math.max(11, Math.round(page.width * 0.0105))}px`,
+            fontWeight: 700,
+            letterSpacing: "0.04em",
+            color: "#334155",
+          }}
+        >
+          <span style={{ display: "inline-block", padding: "5px 11px", border: "1px solid rgba(100,116,139,.35)", borderRadius: "999px", background: "rgba(255,255,255,.92)", boxShadow: "0 1px 3px rgba(15,23,42,.08)" }}>
+            Certificate ID: {certificateId}
+          </span>
+        </div>
       </div>
 
       {!exportMode && (

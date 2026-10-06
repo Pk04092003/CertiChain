@@ -28,7 +28,7 @@ for (const envPath of [...new Set(envCandidates)]) {
 }
 
 const app = express();
-app.use(cors());
+app.use(cors({ origin: true, methods: ["GET","POST","PATCH","OPTIONS"], allowedHeaders: ["Content-Type","Accept"] }));
 app.use(express.json({ limit: "100mb" }));
 
 const port = Number(process.env.PORT || 5000);
@@ -83,15 +83,22 @@ function savePublicCertificates() {
 }
 
 function publicCertificatePayload(body = {}) {
-  const id = String(body.id || "").trim();
+  const id = String(body.id || "").trim().toUpperCase();
   if (!id) return null;
+  const isRevoked = Boolean(body.blockchainRevoked) || String(body.status || "").trim() === "Revoked";
+  const isDisqualified = String(body.status || "").trim() === "Disqualified";
   return {
     id,
+    certificateId: id,
     name: String(body.name || "Participant").trim(),
     course: String(body.course || body.templateName || "Certificate").trim(),
     templateName: String(body.templateName || "Certificate").trim(),
     issuedAt: body.issuedAt || null,
-    status: String(body.status || "Issued"),
+    status: isRevoked ? "Revoked" : (isDisqualified ? "Disqualified" : "Issued"),
+    verificationStatus: isRevoked ? "Revoked" : (isDisqualified ? "Disqualified" : "Verified"),
+    blockchainRevoked: isRevoked,
+    blockchainRevokedAt: body.blockchainRevokedAt || null,
+    revocationReason: body.revocationReason || null,
     createdByName: String(body.createdByName || "Authorized Institution"),
     createdBy: String(body.createdBy || ""),
     blockchainStatus: String(body.blockchainStatus || "Not registered"),
@@ -135,7 +142,7 @@ async function upsertPublicCertificate(payload) {
 }
 
 async function findPublicCertificate(id) {
-  const target = String(id || "").trim();
+  const target = String(id || "").trim().toUpperCase();
   if (!target) return null;
   const collection = await getPublicCollection();
   if (collection) {
@@ -153,7 +160,7 @@ async function findPublicCertificate(id) {
 }
 
 async function patchPublicCertificate(id, patch = {}) {
-  const target = String(id || "").trim();
+  const target = String(id || "").trim().toUpperCase();
   if (!target) return null;
   const existing = await findPublicCertificate(target);
   if (!existing) return null;
@@ -477,6 +484,9 @@ app.patch('/api/public/certificates/:certificateId', async (req, res) => {
       disqualificationReason: req.body?.disqualificationReason,
       disqualifiedBy: req.body?.disqualifiedBy,
       disqualifiedAt: req.body?.disqualifiedAt,
+      blockchainRevoked: req.body?.blockchainRevoked,
+      blockchainRevokedAt: req.body?.blockchainRevokedAt,
+      revocationReason: req.body?.revocationReason,
       certificateHash: req.body?.certificateHash,
       createdByName: req.body?.createdByName,
       createdBy: req.body?.createdBy,
