@@ -9,7 +9,7 @@ import { ArrowLeft, CheckCircle2, Download, Loader2, Mail, QrCode, Send, ShieldC
 import { captureCertificatePng, certificatePngToPdf, downloadBlob, downloadDataUrl } from "../certificateExport";
 import { getVerificationUrl } from "../verificationUrl";
 
-const API_BASE_URL = (import.meta.env.VITE_API_URL || "http://localhost:5000").replace(/\/$/, "");
+const API_BASE_URL = (import.meta.env.VITE_API_URL || "https://certichain-xczm.onrender.com").replace(/\/$/, "");
 function valueForVariable(data, key) { const exact=data?.[key]; if(exact!==undefined&&exact!==null)return String(exact); const found=Object.entries(data||{}).find(([k])=>String(k).toLowerCase()===String(key).toLowerCase()); return found?String(found[1]??""):""; }
 function isValidEmail(email){return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email||"").trim())}
 function escapeHtml(value){return String(value??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;")}
@@ -21,7 +21,7 @@ async function sendCertificateEmail(record,email,dataUrl,pdfBlob){
  const subject=renderEmailTemplate(settings.emailTemplate.subject,values)||`Certificate of Completion – ${name}`;
  const body=renderEmailTemplate(settings.emailTemplate.body,values).replace(/\n/g,"<br/>");
  const png=String(dataUrl).split(",")[1]; const pdfArray=pdfBlob?new Uint8Array(await pdfBlob.arrayBuffer()):null; let pdfBase64=""; if(pdfArray){let binary="";for(let i=0;i<pdfArray.length;i+=1)binary+=String.fromCharCode(pdfArray[i]);pdfBase64=btoa(binary)}
- const response=await fetch(`${API_BASE_URL}/api/email/certificate`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({to:email,subject,html:`<div style="font-family:Arial,sans-serif;line-height:1.6;color:#0f172a">${body}</div>`,filename:`${record.id}.png`,contentType:"image/png",contentBase64:png,attachments:pdfBase64?[{filename:`${record.id}.pdf`,contentType:"application/pdf",contentBase64:pdfBase64}]:[]})});
+ let response;try{response=await fetch(`${API_BASE_URL}/api/email/certificate`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({to:email,subject,html:`<div style="font-family:Arial,sans-serif;line-height:1.6;color:#0f172a">${body}</div>`,filename:`${record.id}.png`,contentType:"image/png",contentBase64:png,attachments:pdfBase64?[{filename:`${record.id}.pdf`,contentType:"application/pdf",contentBase64:pdfBase64}]:[]})});}catch(e){throw new Error(e instanceof TypeError?`Cannot reach email backend at ${API_BASE_URL}`:(e?.message||"Email backend request failed."));}
  const data=await response.json().catch(()=>({})); if(!response.ok)throw new Error(data?.error||"Certificate email failed."); return data;
 }
 
