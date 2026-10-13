@@ -41,19 +41,19 @@ export default function ActionResultModal({
 
   return (
     <div className="cc-modal-backdrop" role="dialog" aria-modal="true" aria-label={title}>
-      <div className="cc-modal-card">
+      <div className="cc-modal-card relative mx-4 w-full max-w-2xl overflow-hidden rounded-3xl border border-white/70 bg-white shadow-2xl shadow-slate-950/20">
         <div className={`h-1.5 w-full bg-gradient-to-r ${style.accent}`} />
         <button type="button" onClick={onClose} className="absolute right-4 top-4 rounded-full p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700" aria-label="Close">
           <X size={18} />
         </button>
 
         <div className="px-6 pb-6 pt-8 text-center sm:px-8">
-          <div className="cc-modal-icon mx-auto">
+          <div className="cc-modal-icon mx-auto flex justify-center">
             <div className={`flex h-16 w-16 items-center justify-center rounded-full ${style.iconWrap}`}>
               <Icon size={34} strokeWidth={2.2} />
             </div>
           </div>
-          <div className="mt-5 text-xs font-bold uppercase tracking-[0.22em] text-slate-400">CertiChain</div>
+          <div className="mt-5 inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.22em] text-slate-500"><ShieldCheck size={13} /> CertiChain · Secure issuance</div>
           <h2 className="mt-2 text-2xl font-extrabold tracking-tight text-slate-900">{title}</h2>
           {message && <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-500">{message}</p>}
 

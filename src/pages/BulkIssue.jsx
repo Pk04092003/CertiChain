@@ -19,6 +19,9 @@ import {
   Loader2,
   Archive,
   RefreshCcw,
+  X,
+  AlertTriangle,
+  ShieldCheck,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { toPng } from "html-to-image";
@@ -295,6 +298,8 @@ export default function BulkIssue() {
   const [emailStatus, setEmailStatus] = useState({});
   const [zipBusy, setZipBusy] = useState(false);
   const [resultModal, setResultModal] = useState(null);
+  const [duplicatePrompt, setDuplicatePrompt] = useState(null);
+  const [duplicatePrompt, setDuplicatePrompt] = useState(null);
   const singleAutoEmailStartedRef = useRef(new Set());
   const bulkAutoEmailStartedRef = useRef(new Set());
 
@@ -635,7 +640,7 @@ export default function BulkIssue() {
     return displayData;
   };
 
-  const issueBulk = async () => {
+  const issueBulk = async (allowDuplicates = false) => {
     if (!selectedTemplate) {
       setMessage("Select a saved template before issuing bulk certificates.");
       return;
@@ -670,14 +675,11 @@ export default function BulkIssue() {
       })
       .filter(({ email, course }) => existing.some((record) => String(record.email || '').toLowerCase() === email && String(record.data?.course || record.templateName || '').trim().toLowerCase() === course));
 
-    if (duplicateRows.length) {
-      const preview = duplicateRows.slice(0, 5).map((item) => `Row ${item.index + 2}: ${item.email}`).join('\n');
-      const proceed = window.confirm(`Duplicate certificate candidates were found.\n\n${preview}${duplicateRows.length > 5 ? `\n…and ${duplicateRows.length - 5} more.` : ''}\n\nIssued certificates are immutable, so an existing record will not be replaced. Click OK to issue new certificate IDs, or Cancel to stop.`);
-      if (!proceed) {
-        setMessage('Bulk issuance cancelled because duplicate certificate candidates were found.');
-        return;
-      }
+    if (duplicateRows.length && !allowDuplicates) {
+      setDuplicatePrompt({ rows: duplicateRows, count: duplicateRows.length });
+      return;
     }
+    if (allowDuplicates) setDuplicatePrompt(null);
 
     try {
       const issuedAt = new Date().toISOString();
@@ -1254,6 +1256,42 @@ export default function BulkIssue() {
           </div>
         )}
       </div>
+      {duplicatePrompt && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-md" role="dialog" aria-modal="true" aria-labelledby="duplicate-title">
+          <div className="relative w-full max-w-xl overflow-hidden rounded-3xl border border-white/60 bg-white shadow-2xl shadow-slate-950/30">
+            <div className="h-1.5 bg-gradient-to-r from-amber-400 via-orange-500 to-rose-500" />
+            <button type="button" onClick={() => { setDuplicatePrompt(null); setMessage("Bulk issuance cancelled because duplicate certificate candidates were found."); }} className="absolute right-4 top-4 rounded-full p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-800" aria-label="Close duplicate warning"><X size={18} /></button>
+            <div className="p-6 sm:p-8">
+              <div className="flex items-start gap-4">
+                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-amber-100 text-amber-700 ring-8 ring-amber-50"><AlertTriangle size={27} /></div>
+                <div className="pr-8">
+                  <span className="inline-flex rounded-full bg-amber-50 px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider text-amber-700">Review required</span>
+                  <h2 id="duplicate-title" className="mt-2 text-2xl font-extrabold tracking-tight text-slate-900">Possible duplicate recipients</h2>
+                  <p className="mt-2 text-sm leading-6 text-slate-500">We found {duplicatePrompt.count} row{duplicatePrompt.count === 1 ? "" : "s"} that may match previously issued certificates. Existing issued records will never be overwritten.</p>
+                </div>
+              </div>
+              <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-3 sm:p-4">
+                <div className="mb-2 flex items-center justify-between text-xs font-bold uppercase tracking-wider text-slate-400"><span>CSV rows to review</span><span>{Math.min(duplicatePrompt.count, 5)} of {duplicatePrompt.count}</span></div>
+                <div className="space-y-2">
+                  {duplicatePrompt.rows.slice(0, 5).map((item) => (
+                    <div key={`${item.index}-${item.email}`} className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2.5">
+                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-xs font-extrabold text-amber-700">{item.index + 2}</span>
+                      <div className="min-w-0 flex-1"><div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Row {item.index + 2}</div><div className="break-all text-sm font-semibold text-slate-800">{item.email}</div></div>
+                      <AlertCircle size={16} className="shrink-0 text-amber-500" />
+                    </div>
+                  ))}
+                  {duplicatePrompt.count > 5 && <p className="px-1 pt-1 text-xs text-slate-500">Plus {duplicatePrompt.count - 5} additional matching rows.</p>}
+                </div>
+              </div>
+              <div className="mt-4 flex items-start gap-3 rounded-xl border border-blue-100 bg-blue-50 p-3 text-sm leading-5 text-blue-800"><ShieldCheck size={18} className="mt-0.5 shrink-0" /><span>Continue only if you intend to create new certificate IDs for these recipients. Their existing certificates remain unchanged.</span></div>
+              <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+                <button type="button" onClick={() => { setDuplicatePrompt(null); setMessage("Bulk issuance cancelled because duplicate certificate candidates were found."); }} className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-50"><X size={16} /> Cancel issuance</button>
+                <button type="button" onClick={() => issueBulk(true)} className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-blue-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-blue-600/20 transition hover:-translate-y-0.5 hover:shadow-xl"><ShieldCheck size={17} /> Issue new certificate IDs</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       <ActionResultModal
         open={Boolean(resultModal)}
         onClose={() => setResultModal(null)}
