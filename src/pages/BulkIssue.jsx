@@ -424,6 +424,7 @@ export default function BulkIssue() {
       setGeneratedId(id);
       setEmailStatus({ [id]: "Preparing PDF, IPFS and blockchain…" });
       setSingleEmailState("sending");
+      setBulkProgress({ open: true, phase: "preparing", sent: 0, failed: 0, total: 1, message: `Preparing the certificate PDF, uploading it to IPFS, and registering ${id} on the blockchain…` });
       setMessage(`Certificate ${id} was issued successfully. Securing it on IPFS and blockchain, then emailing the PDF to ${enteredEmail}…`);
     } catch (error) {
       setMessage(error?.message || "Unable to save the issued certificate.");
@@ -452,11 +453,13 @@ export default function BulkIssue() {
       updateRecordEmailStatus(record.id, "Failed", { emailError: "Invalid or missing email address." });
       setSingleEmailState("error");
       setEmailStatus((current) => ({ ...current, [record.id]: "Failed" }));
+      setBulkProgress((current) => ({ ...current, open: true, phase: "failed", sent: 0, failed: 1, message: "The certificate was issued, but the participant email address is invalid." }));
       setMessage(`Certificate ${record.id} was issued, but the participant email address is invalid.`);
       return;
     }
     try {
       setSingleEmailState("sending");
+      setBulkProgress((current) => ({ ...current, open: true, phase: "preparing", sent: 0, failed: 0, total: 1, message: `Preparing the PDF and securing certificate ${record.id} on IPFS and blockchain…` }));
       setEmailStatus((current) => ({ ...current, [record.id]: "Sending…" }));
       const serverStatus = await getEmailServerStatus();
       if (!serverStatus.configured || !serverStatus.connected) {
@@ -464,6 +467,7 @@ export default function BulkIssue() {
         updateRecordEmailStatus(record.id, "Failed", { emailError: reason });
         setSingleEmailState("error");
         setEmailStatus((current) => ({ ...current, [record.id]: "Failed" }));
+        setBulkProgress((current) => ({ ...current, open: true, phase: "failed", sent: 0, failed: 1, message: `The certificate was issued, but email delivery is unavailable: ${reason}` }));
         setMessage(`Certificate ${record.id} was issued, but the automatic email was not sent: ${reason}`);
         return;
       }
@@ -494,6 +498,7 @@ export default function BulkIssue() {
         publicVerificationError: automation.publicVerification?.ok ? null : (automation.publicVerification?.error || null),
       });
       const verificationUrl = getVerificationUrl(record.id);
+      setBulkProgress((current) => ({ ...current, open: true, phase: "sending", message: `Sending the certificate PDF to ${email} through Gmail…` }));
       setEmailStatus((current) => ({ ...current, [record.id]: "Sending PDF…" }));
       const result = await sendCertificateEmail({ record, pdfBase64, verificationUrl, orientation: record?.template?.page?.orientation });
       const sent = Boolean(result.sent);
@@ -506,6 +511,7 @@ export default function BulkIssue() {
       addAuditLog(sent ? "Certificate email sent automatically" : "Automatic certificate email failed", { certificateId: record.id, to: email });
       setEmailStatus((current) => ({ ...current, [record.id]: sent ? "Sent" : "Failed" }));
       setSingleEmailState(sent ? "sent" : "error");
+      setBulkProgress((current) => ({ ...current, open: true, phase: sent ? "success" : "failed", sent: sent ? 1 : 0, failed: sent ? 0 : 1, message: sent ? `Certificate ${record.id} was secured and the PDF was emailed to ${email}.` : `Certificate ${record.id} was issued, but email delivery failed: ${result.error || "Please review the email status."}` }));
       setMessage(sent ? `Certificate ${record.id} was issued, secured on IPFS/blockchain, and emailed to ${email}.` : `Certificate ${record.id} was issued, but the email failed.`);
       if (sent) {
         setResultModal({
@@ -529,6 +535,7 @@ export default function BulkIssue() {
       addAuditLog("Automatic certificate email failed", { certificateId: record.id, to: email, error: error.message || "Certificate email failed." });
       setSingleEmailState("error");
       setEmailStatus((current) => ({ ...current, [record.id]: "Failed" }));
+      setBulkProgress((current) => ({ ...current, open: true, phase: "failed", sent: 0, failed: 1, message: `Certificate ${record.id} was issued, but the process failed: ${error.message || "Certificate email failed."}` }));
       setMessage(`Certificate ${record.id} was issued, but the email failed: ${error.message || "Certificate email failed."}`);
     }
   };
@@ -1272,8 +1279,8 @@ export default function BulkIssue() {
                 {bulkProgress.phase === "success" ? <CheckCircle2 size={32} /> : bulkProgress.phase === "failed" || bulkProgress.phase === "partial" ? <AlertTriangle size={32} /> : <Loader2 size={32} className="animate-spin" />}
               </div>
               <div className="mt-5 text-center">
-                <p className="text-xs font-extrabold uppercase tracking-[0.2em] text-slate-400">CertiChain · Bulk issuance</p>
-                <h2 id="bulk-progress-title" className="mt-2 text-2xl font-extrabold tracking-tight text-slate-900">{bulkProgress.phase === "preparing" ? "Preparing certificates" : bulkProgress.phase === "sending" ? "Sending certificates" : bulkProgress.phase === "success" ? "Certificates emailed successfully" : bulkProgress.phase === "partial" ? "Bulk email completed with issues" : "Certificate delivery needs attention"}</h2>
+                <p className="text-xs font-extrabold uppercase tracking-[0.2em] text-slate-400">CertiChain · {bulkProgress.total === 1 ? "Single certificate issuance" : "Bulk issuance"}</p>
+                <h2 id="bulk-progress-title" className="mt-2 text-2xl font-extrabold tracking-tight text-slate-900">{bulkProgress.phase === "preparing" ? (bulkProgress.total === 1 ? "Preparing certificate" : "Preparing certificates") : bulkProgress.phase === "sending" ? (bulkProgress.total === 1 ? "Sending certificate" : "Sending certificates") : bulkProgress.phase === "success" ? (bulkProgress.total === 1 ? "Certificate emailed successfully" : "Certificates emailed successfully") : bulkProgress.phase === "partial" ? "Bulk email completed with issues" : "Certificate delivery needs attention"}</h2>
                 <p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-slate-500">{bulkProgress.message}</p>
               </div>
               <div className="mt-6 grid grid-cols-3 gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-3 text-center">
