@@ -838,6 +838,9 @@ app.get("/api/public/verify/:certificateId", async (req, res) => {
     course: String(metadata?.course || metadata?.templateName || "Issued certificate"),
     templateName: String(metadata?.templateName || "Certificate"),
     issuedAt: metadata?.issuedAt || (chain?.issuedAt ? new Date(chain.issuedAt * 1000).toISOString() : null),
+    // Publisher display name comes from the published CertiChain record.
+    createdByName: String(metadata?.createdByName || "Authorized Institution"),
+    createdBy: String(metadata?.createdBy || ""),
     status: state === "REVOKED" ? "Revoked" : state === "DISQUALIFIED" ? "Disqualified" : state === "VERIFIED" ? "Issued" : "Unregistered",
     verificationStatus: state === "VERIFIED" ? "Verified" : state === "REVOKED" ? "Revoked" : state === "DISQUALIFIED" ? "Disqualified" : "Unregistered",
     blockchainStatus: chain?.exists ? (chain.revoked ? "Revoked" : "Registered") : String(metadata?.blockchainStatus || "Not registered"),

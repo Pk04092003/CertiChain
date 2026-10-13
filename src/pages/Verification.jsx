@@ -188,7 +188,9 @@ export default function Verification() {
                 <Detail icon={GraduationCap} label="Course / Certificate" value={certificate.course} />
                 <Detail icon={FileKey2} label="Template" value={certificate.templateName} />
                 <Detail icon={CalendarDays} label="Issued date" value={formatDate(certificate.issuedAt)} />
-                <Detail icon={Building2} label="Issued by" value={certificate.createdByName} />
+                <Detail icon={Building2} label="Published by (institution)" value={certificate.createdByName || "Authorized Institution"} />
+                <Detail icon={UserRound} label="Publisher account" value={certificate.createdBy || "Not recorded"} mono />
+                <Detail icon={Blocks} label="Blockchain issuing wallet" value={certificate.blockchainIssuer || certificate.issuerAddress || "Not available on-chain"} mono wide />
               </div>
 
               {certificate.publicFields && Object.keys(certificate.publicFields).length > 0 && (
