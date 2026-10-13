@@ -47,14 +47,14 @@ const STATES = {
   },
 };
 
-function Detail({ icon: Icon, label, value, wide = false, mono = false }) {
+function Detail({ icon: Icon, label, value, wide = false, mono = false, prominent = false }) {
   return (
-    <div className={`min-w-0 rounded-2xl border border-slate-200 bg-white p-3 sm:p-4 ${wide ? "sm:col-span-2" : ""}`}>
-      <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+    <div className={`min-w-0 rounded-2xl border p-3 sm:p-4 ${wide ? "sm:col-span-2" : ""} ${prominent ? "border-indigo-300 bg-indigo-50 shadow-sm ring-1 ring-indigo-100 sm:col-span-2" : "border-slate-200 bg-white"}`}>
+      <div className={`flex items-center gap-2 uppercase tracking-wide ${prominent ? "text-xs font-extrabold text-indigo-700" : "text-xs font-semibold text-slate-400"}`}>
         <Icon size={15} />
         {label}
       </div>
-      <div className={`mt-2 min-w-0 break-words [overflow-wrap:anywhere] font-semibold text-slate-900 ${mono ? "font-mono text-sm" : ""}`}>
+      <div className={`mt-2 min-w-0 break-words [overflow-wrap:anywhere] ${prominent ? "text-base font-extrabold text-slate-950 sm:text-lg" : "font-semibold text-slate-900"} ${mono ? "font-mono" : ""}`}>
         {value || "—"}
       </div>
     </div>
@@ -183,7 +183,26 @@ export default function Verification() {
               </div>
             </section>
 
-            {/* Full public certificate details. Email is intentionally omitted because public verification must not expose participant email. */}
+            <section className="rounded-2xl border-2 border-indigo-300 bg-indigo-50 p-4 shadow-sm sm:p-5">
+              <div className="text-xs font-extrabold uppercase tracking-wider text-indigo-700">Publisher account</div>
+              <div className="mt-2 break-words font-mono text-lg font-black text-slate-950 sm:text-xl [overflow-wrap:anywhere]">
+                {certificate.createdBy || "Not recorded"}
+              </div>
+            </section>
+
+              {certificate.publicFields && Object.keys(certificate.publicFields).length > 0 && (
+                <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-5">
+                  <div className="font-bold text-slate-900">Certificate variables</div>
+                  <p className="mt-1 text-xs text-slate-500">All issuer-defined certificate fields are shown here. Participant email is kept private.</p>
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                    {Object.entries(certificate.publicFields).map(([key, value]) => (
+                      <Detail key={key} icon={FileKey2} label={String(key).replace(/[_-]+/g, " ").replace(/\b\w/g, (m) => m.toUpperCase())} value={String(value || "—")} />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+                        {/* Full public certificate details. Email is intentionally omitted because public verification must not expose participant email. */}
             <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-8">
               <div className="border-b border-slate-100 pb-5">
                 <div className="text-xs font-semibold uppercase tracking-wider text-slate-400">Certificate details</div>
@@ -198,21 +217,10 @@ export default function Verification() {
                 <Detail icon={FileKey2} label="Template" value={certificate.templateName} />
                 <Detail icon={CalendarDays} label="Issued date" value={formatDate(certificate.issuedAt)} />
                 <Detail icon={Building2} label="Published by (institution)" value={certificate.createdByName || "Authorized Institution"} />
-                <Detail icon={UserRound} label="Publisher account" value={certificate.createdBy || "Not recorded"} mono />
                 <Detail icon={Blocks} label="Blockchain issuing wallet" value={certificate.blockchainIssuer || certificate.issuerAddress || "Not available on-chain"} mono wide />
               </div>
 
-              {certificate.publicFields && Object.keys(certificate.publicFields).length > 0 && (
-                <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-5">
-                  <div className="font-bold text-slate-900">Certificate variables</div>
-                  <p className="mt-1 text-xs text-slate-500">All issuer-defined certificate fields are shown here. Participant email is kept private.</p>
-                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                    {Object.entries(certificate.publicFields).map(([key, value]) => (
-                      <Detail key={key} icon={FileKey2} label={String(key).replace(/[_-]+/g, " ").replace(/\b\w/g, (m) => m.toUpperCase())} value={String(value || "—")} />
-                    ))}
-                  </div>
-                </div>
-              )}
+}
 
 
               {state === "DISQUALIFIED" && certificate.disqualificationReason && (
