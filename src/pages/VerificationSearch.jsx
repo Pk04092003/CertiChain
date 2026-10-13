@@ -1,10 +1,66 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ShieldCheck, Search, ArrowLeft, ScanLine } from "lucide-react";
+import { ShieldCheck, Search, ArrowLeft, ScanLine, Camera, X } from "lucide-react";
 
 export default function VerificationSearch() {
   const [id, setId] = useState("");
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [scanError, setScanError] = useState("");
+  const videoRef = useRef(null);
+  const streamRef = useRef(null);
   const nav = useNavigate();
+
+  useEffect(() => {
+    if (!scannerOpen) return;
+    let cancelled = false;
+    let timer;
+    const startScanner = async () => {
+      try {
+        if (!("BarcodeDetector" in window)) {
+          setScanError("Live QR scanning is not supported by this browser. Use your phone camera or Google Lens to scan the certificate QR code.");
+          return;
+        }
+        const detector = new window.BarcodeDetector({ formats: ["qr_code"] });
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } }, audio: false });
+        if (cancelled) { stream.getTracks().forEach((track) => track.stop()); return; }
+        streamRef.current = stream;
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          await videoRef.current.play();
+        }
+        const scan = async () => {
+          if (cancelled || !videoRef.current) return;
+          try {
+            const codes = await detector.detect(videoRef.current);
+            if (codes?.length && codes[0].rawValue) {
+              const raw = codes[0].rawValue;
+              stopScanner();
+              if (/^https?:\/\//i.test(raw)) window.location.assign(raw);
+              else nav(`/verify/${encodeURIComponent(raw.trim())}`);
+              return;
+            }
+          } catch { /* Camera frames can be temporarily unreadable. */ }
+          timer = window.setTimeout(scan, 250);
+        };
+        scan();
+      } catch {
+        setScanError("Could not access the camera. Allow camera permission and open this page over HTTPS, then try again.");
+      }
+    };
+    startScanner();
+    return () => {
+      cancelled = true;
+      if (timer) window.clearTimeout(timer);
+      if (streamRef.current) streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    };
+  }, [scannerOpen, nav]);
+
+  const stopScanner = () => {
+    if (streamRef.current) streamRef.current.getTracks().forEach((track) => track.stop());
+    streamRef.current = null;
+    setScannerOpen(false);
+  };
 
   const submit = (e) => {
     e.preventDefault();
@@ -45,6 +101,27 @@ export default function VerificationSearch() {
               Verify certificate
             </button>
           </form>
+
+          <div className="mt-4">
+            <button type="button" onClick={() => { setScanError(""); setScannerOpen(true); }} className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-6 py-3 font-semibold text-emerald-800 hover:bg-emerald-100">
+              <Camera size={18} /> Scan QR with camera
+            </button>
+          </div>
+
+          {scannerOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4">
+              <div role="dialog" aria-modal="true" aria-label="Scan certificate QR code" className="w-full max-w-lg rounded-3xl bg-white p-5 text-left shadow-2xl">
+                <div className="flex items-center justify-between gap-3">
+                  <h2 className="text-lg font-bold">Scan certificate QR code</h2>
+                  <button type="button" onClick={stopScanner} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100" aria-label="Close scanner"><X size={20} /></button>
+                </div>
+                <p className="mt-2 text-sm text-slate-500">Allow camera access and hold the QR code inside the frame.</p>
+                <video ref={videoRef} className="mt-4 aspect-video w-full rounded-2xl bg-slate-950 object-cover" muted playsInline />
+                {scanError && <p role="alert" className="mt-3 rounded-xl bg-amber-50 p-3 text-sm text-amber-800">{scanError}</p>}
+                <button type="button" onClick={stopScanner} className="mt-4 w-full rounded-xl border border-slate-200 px-4 py-3 font-semibold text-slate-700">Cancel scan</button>
+              </div>
+            </div>
+          )}
 
           <div className="mt-8 grid gap-4 text-left sm:grid-cols-2">
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">

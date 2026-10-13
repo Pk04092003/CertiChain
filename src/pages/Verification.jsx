@@ -220,9 +220,6 @@ export default function Verification() {
                 <Detail icon={Blocks} label="Blockchain issuing wallet" value={certificate.blockchainIssuer || certificate.issuerAddress || "Not available on-chain"} mono wide />
               </div>
 
-}
-
-
               {state === "DISQUALIFIED" && certificate.disqualificationReason && (
                 <div className="mt-5 rounded-2xl border border-rose-100 bg-rose-50 p-5 text-sm text-rose-800">
                   <div className="font-bold">Disqualification reason</div>
