@@ -4,7 +4,6 @@ import { Link, useNavigate } from "react-router-dom";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Search, LockKeyhole, ShieldCheck, Download, Mail, FileDown, FileText, Loader2 } from "lucide-react";
 import JSZip from "jszip";
-import { demoCertificates } from "../data";
 import StatusBadge from "../components/StatusBadge";
 import { loadIssuedCertificates, updateIssuedCertificate } from "../certificateStore";
 import { captureCertificatePng, certificatePngToPdf, downloadBlob, downloadDataUrl } from "../certificateExport";
@@ -21,7 +20,7 @@ function issuedTime(r){const t=new Date(r.issuedAt||"").getTime();return Number.
 function csvRow(v){return `"${String(v??"").replace(/"/g,'""')}"`}
 
 export default function Certificates(){const navigate=useNavigate();const [issued,setIssued]=useState([]),[q,setQ]=useState(""),[filter,setFilter]=useState("All"),[sort,setSort]=useState("newest"),[dateFilter,setDateFilter]=useState(""),[selected,setSelected]=useState([]),[zipBusy,setZipBusy]=useState(false),[downloadBusy,setDownloadBusy]=useState(null),[previewRecord,setPreviewRecord]=useState(null);const previewRef=useRef(null);const refresh=()=>setIssued(loadIssuedCertificates());useEffect(()=>{refresh();const f=()=>refresh();window.addEventListener("certichain:issued-certificates-updated",f);const i=setInterval(refresh,1500);return()=>{window.removeEventListener("certichain:issued-certificates-updated",f);clearInterval(i)}},[]);
- const registry=useMemo(()=>[...issued.map(r=>({id:r.id,name:nameOf(r),email:r.email||val(r.data,"email"),course:courseOf(r),status:statusOf(r),date:dateOf(r),issuedAt:r.issuedAt||"",dynamic:true,record:r})),...demoCertificates.map(x=>({...x,dynamic:false}))], [issued]);
+ const registry=useMemo(()=>issued.map(r=>({id:r.id,name:nameOf(r),email:r.email||val(r.data,"email"),course:courseOf(r),status:statusOf(r),date:dateOf(r),issuedAt:r.issuedAt||"",dynamic:true,record:r})), [issued]);
  const filtered=useMemo(() => registry
    .filter(c => !dateFilter || (c.record?.issuedAt && new Date(c.record.issuedAt).toISOString().slice(0,10) === dateFilter))
    .filter(c => filter === "All" || (filter === "Emailed" && c.record?.emailStatus === "Sent") || (filter === "Failed" && c.record?.emailStatus === "Failed") || (filter === "Disqualified" && c.status === "Disqualified") || (filter === "Issued" && c.status === "Issued"))
