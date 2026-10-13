@@ -155,7 +155,16 @@ export default function Verification() {
         )}
 
         {!loading && result?.ok && certificate && (
-          <div className="space-y-5">
+          <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/60 px-3 py-4 backdrop-blur-sm sm:px-6 sm:py-8">
+            <div role="dialog" aria-modal="true" aria-labelledby="verification-popup-title" className="mx-auto max-h-[calc(100vh-2rem)] w-full max-w-4xl overflow-y-auto rounded-3xl bg-slate-50 p-3 shadow-2xl ring-1 ring-white/40 sm:max-h-[calc(100vh-4rem)] sm:p-6">
+              <div className="sticky top-0 z-10 mb-4 flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white/95 px-4 py-3 backdrop-blur">
+                <div>
+                  <div className="text-xs font-semibold uppercase tracking-wider text-slate-400">CertiChain public verification</div>
+                  <h1 id="verification-popup-title" className="mt-1 text-lg font-bold text-slate-900 sm:text-xl">Certificate verification result</h1>
+                </div>
+                <Link to="/" aria-label="Close verification result" className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100"><X size={16} /> Close</Link>
+              </div>
+              <div className="space-y-4">
             {/* QR verification result: intentionally no certificate preview or status seal. */}
             <section className={`rounded-3xl border p-4 shadow-sm sm:p-8 ${config?.shell || "border-slate-200 bg-white"}`}>
               <div className="flex flex-col items-center text-center">
@@ -283,6 +292,8 @@ export default function Verification() {
                 <button onClick={copyId} className="inline-flex items-center gap-2 rounded-xl border border-blue-200 bg-white px-5 py-3 text-sm font-semibold text-blue-900"><Copy size={16} /> {copied ? "Copied" : "Copy Certificate ID"}</button>
               </div>
             </section>
+              </div>
+            </div>
           </div>
         )}
       </main>
