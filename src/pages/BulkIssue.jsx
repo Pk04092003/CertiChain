@@ -299,6 +299,7 @@ export default function BulkIssue() {
   const [zipBusy, setZipBusy] = useState(false);
   const [resultModal, setResultModal] = useState(null);
   const [duplicatePrompt, setDuplicatePrompt] = useState(null);
+  const [bulkProgress, setBulkProgress] = useState({ open: false, phase: "preparing", sent: 0, failed: 0, total: 0, message: "Getting certificates ready…" });
   const singleAutoEmailStartedRef = useRef(new Set());
   const bulkAutoEmailStartedRef = useRef(new Set());
 
@@ -786,6 +787,7 @@ export default function BulkIssue() {
     if (!recordsToSend.length) return;
 
     const total = recordsToSend.length;
+    setBulkProgress({ open: true, phase: "preparing", sent: 0, failed: 0, total, message: `Preparing ${total} certificate${total === 1 ? "" : "s"} for secure delivery…` });
     if (!isRetry) {
       setBulkEmailState({ status: "sending", sent: 0, failed: 0, total });
       setEmailStatus((current) => ({ ...current, ...Object.fromEntries(recordsToSend.map((record) => [record.id, "Preparing…"])) }));
@@ -802,6 +804,7 @@ export default function BulkIssue() {
         recordsToSend.forEach((record) => updateRecordEmailStatus(record.id, statusText));
         setEmailStatus((current) => ({ ...current, ...Object.fromEntries(recordsToSend.map((record) => [record.id, statusText])) }));
         setBulkEmailState({ status: "failed", sent: 0, failed: total, total });
+        setBulkProgress((current) => ({ ...current, phase: "failed", sent: 0, failed: total, message: "Email service is not connected. No certificates were emailed." }));
         setMessage("Email was not sent because Gmail is not connected. Open Settings, configure Google OAuth, authorize the Gmail account, add GMAIL_REFRESH_TOKEN to Render, and redeploy the backend.");
         return;
       }
@@ -816,10 +819,12 @@ export default function BulkIssue() {
           : "Missing or invalid email address.",
       }));
         setBulkEmailState({ status: "failed", sent: 0, failed: total, total });
+        setBulkProgress((current) => ({ ...current, phase: "failed", sent: 0, failed: total, message: "No valid participant email addresses were found." }));
         setMessage("No valid participant email addresses were available in the issued batch.");
         return;
       }
 
+      setBulkProgress((current) => ({ ...current, phase: "preparing", message: `Preparing ${sendable.length} certificate PDF attachment${sendable.length === 1 ? "" : "s"}, and registering records…` }));
       setMessage(`Preparing ${sendable.length} certificate attachments in parallel…`);
       const prepared = await Promise.all(sendable.map(async (record) => {
         try {
@@ -878,6 +883,7 @@ export default function BulkIssue() {
 
       const ready = prepared.filter((item) => item.ok);
       ready.forEach((item) => updateRecordEmailStatus(item.record.id, "Sending…"));
+      setBulkProgress((current) => ({ ...current, phase: "sending", message: `Sending ${ready.length} email${ready.length === 1 ? "" : "s"} through Gmail…` }));
       setMessage(`Sending ${ready.length} participant certificates in parallel. Each participant receives only the certificate from their own CSV row.`);
 
       // Use one HTTP request per certificate and launch all requests together.
@@ -918,12 +924,13 @@ export default function BulkIssue() {
       }));
 
       setBulkEmailState({ status: failed === 0 ? "sent" : sent > 0 ? "partial" : "failed", sent, failed, total });
+      setBulkProgress((current) => ({ ...current, phase: failed === 0 ? "success" : sent > 0 ? "partial" : "failed", sent, failed, message: failed === 0 ? "All certificate emails were sent successfully." : `${sent} sent and ${failed} failed. Review the results below.` }));
       setMessage(
         failed === 0
           ? `All ${sent} participant certificates were secured on IPFS/blockchain and mailed successfully as PDF attachments.`
           : `${sent} certificate email${sent === 1 ? "" : "s"} sent, ${failed} failed. Failed certificates remain in the registry for recovery.`
       );
-      if (sent > 0) {
+      if (false && sent > 0) {
         setResultModal({
           tone: failed === 0 ? "success" : "info",
           title: failed === 0 ? "Certificates emailed successfully" : "Bulk email completed with some failures",
@@ -941,6 +948,7 @@ export default function BulkIssue() {
     } catch (error) {
       console.error(error);
       setBulkEmailState({ status: "failed", sent: 0, failed: total, total });
+      setBulkProgress((current) => ({ ...current, phase: "failed", sent: 0, failed: total, message: error.message || "Bulk certificate email failed." }));
       setMessage(error.message || "Bulk certificate email failed.");
     }
   };
@@ -1255,6 +1263,31 @@ export default function BulkIssue() {
           </div>
         )}
       </div>
+      {bulkProgress.open && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/65 p-4 backdrop-blur-md" role="dialog" aria-modal="true" aria-labelledby="bulk-progress-title">
+          <div className="relative w-full max-w-lg overflow-hidden rounded-3xl border border-white/70 bg-white shadow-2xl shadow-slate-950/30">
+            <div className={`h-2 ${bulkProgress.phase === "success" ? "bg-gradient-to-r from-emerald-400 to-teal-500" : bulkProgress.phase === "failed" || bulkProgress.phase === "partial" ? "bg-gradient-to-r from-amber-400 to-orange-500" : "bg-gradient-to-r from-indigo-500 via-blue-500 to-cyan-400"}`} />
+            <div className="p-7 sm:p-8">
+              <div className={`mx-auto flex h-16 w-16 items-center justify-center rounded-2xl ${bulkProgress.phase === "success" ? "bg-emerald-100 text-emerald-700" : bulkProgress.phase === "failed" || bulkProgress.phase === "partial" ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700"}`}>
+                {bulkProgress.phase === "success" ? <CheckCircle2 size={32} /> : bulkProgress.phase === "failed" || bulkProgress.phase === "partial" ? <AlertTriangle size={32} /> : <Loader2 size={32} className="animate-spin" />}
+              </div>
+              <div className="mt-5 text-center">
+                <p className="text-xs font-extrabold uppercase tracking-[0.2em] text-slate-400">CertiChain · Bulk issuance</p>
+                <h2 id="bulk-progress-title" className="mt-2 text-2xl font-extrabold tracking-tight text-slate-900">{bulkProgress.phase === "preparing" ? "Preparing certificates" : bulkProgress.phase === "sending" ? "Sending certificates" : bulkProgress.phase === "success" ? "Certificates emailed successfully" : bulkProgress.phase === "partial" ? "Bulk email completed with issues" : "Certificate delivery needs attention"}</h2>
+                <p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-slate-500">{bulkProgress.message}</p>
+              </div>
+              <div className="mt-6 grid grid-cols-3 gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-3 text-center">
+                <div className={`rounded-xl p-3 ${bulkProgress.phase === "preparing" ? "bg-blue-100 text-blue-800" : "text-slate-500"}`}><div className="text-xs font-bold uppercase tracking-wide">1 · Prepare</div><div className="mt-1 text-xs">PDF & records</div></div>
+                <div className={`rounded-xl p-3 ${bulkProgress.phase === "sending" ? "bg-blue-100 text-blue-800" : bulkProgress.phase === "success" ? "bg-emerald-100 text-emerald-800" : "text-slate-500"}`}><div className="text-xs font-bold uppercase tracking-wide">2 · Send</div><div className="mt-1 text-xs">Gmail delivery</div></div>
+                <div className={`rounded-xl p-3 ${bulkProgress.phase === "success" ? "bg-emerald-100 text-emerald-800" : bulkProgress.phase === "partial" || bulkProgress.phase === "failed" ? "bg-amber-100 text-amber-800" : "text-slate-500"}`}><div className="text-xs font-bold uppercase tracking-wide">3 · Result</div><div className="mt-1 text-xs">{bulkProgress.phase === "success" ? "Complete" : bulkProgress.phase === "partial" ? "Partial" : bulkProgress.phase === "failed" ? "Needs review" : "Pending"}</div></div>
+              </div>
+              {(bulkProgress.phase === "success" || bulkProgress.phase === "partial" || bulkProgress.phase === "failed") && <div className="mt-4 grid grid-cols-2 gap-3"><div className="rounded-xl border border-emerald-100 bg-emerald-50 p-4"><div className="text-xs font-bold uppercase tracking-wider text-emerald-700">Mailed</div><div className="mt-1 text-2xl font-extrabold text-emerald-800">{bulkProgress.sent}</div></div><div className="rounded-xl border border-rose-100 bg-rose-50 p-4"><div className="text-xs font-bold uppercase tracking-wider text-rose-700">Failed</div><div className="mt-1 text-2xl font-extrabold text-rose-800">{bulkProgress.failed}</div></div></div>}
+              {(bulkProgress.phase === "preparing" || bulkProgress.phase === "sending") && <div className="mt-5 h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full w-1/3 animate-pulse rounded-full bg-gradient-to-r from-indigo-500 to-cyan-400" /></div>}
+              {(bulkProgress.phase === "success" || bulkProgress.phase === "partial" || bulkProgress.phase === "failed") && <button type="button" onClick={() => setBulkProgress((current) => ({ ...current, open: false }))} className="mt-6 w-full rounded-xl bg-slate-950 px-5 py-3.5 text-sm font-bold text-white shadow-lg transition hover:bg-slate-800">{bulkProgress.phase === "success" ? "Done" : "Close and review results"}</button>}
+            </div>
+          </div>
+        </div>
+      )}
       {duplicatePrompt && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-md" role="dialog" aria-modal="true" aria-labelledby="duplicate-title">
           <div className="relative w-full max-w-xl overflow-hidden rounded-3xl border border-white/60 bg-white shadow-2xl shadow-slate-950/30">
