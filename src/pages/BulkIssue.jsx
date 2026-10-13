@@ -299,7 +299,6 @@ export default function BulkIssue() {
   const [zipBusy, setZipBusy] = useState(false);
   const [resultModal, setResultModal] = useState(null);
   const [duplicatePrompt, setDuplicatePrompt] = useState(null);
-  const [duplicatePrompt, setDuplicatePrompt] = useState(null);
   const singleAutoEmailStartedRef = useRef(new Set());
   const bulkAutoEmailStartedRef = useRef(new Set());
 
