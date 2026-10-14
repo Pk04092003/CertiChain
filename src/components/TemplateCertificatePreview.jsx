@@ -394,6 +394,12 @@ export default function TemplateCertificatePreview({
             );
           }
 
+          if (item.kind === "star") {
+            return (
+              <div key={item.id} style={{ ...style, background: item.fill || "#f4c542", clipPath: "polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%)" }} />
+            );
+          }
+
           if (item.kind === "circle") {
             return (
               <div

@@ -10,7 +10,16 @@ export async function captureCertificatePng(container) {
   if (!sheet) throw new Error("Certificate preview is not ready.");
   try { await document.fonts?.ready; } catch {}
   await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-  return toPng(sheet, { pixelRatio: 2, cacheBust: true, backgroundColor: "#ffffff" });
+  const pageWidth = Number.parseFloat(sheet.style.width) || sheet.offsetWidth || 1123;
+  const pageHeight = Number.parseFloat(sheet.style.height) || sheet.offsetHeight || 794;
+  return toPng(sheet, {
+    width: pageWidth,
+    height: pageHeight,
+    pixelRatio: 2,
+    cacheBust: true,
+    backgroundColor: sheet.style.backgroundColor || "#ffffff",
+    style: { transform: "none", transformOrigin: "top left", boxShadow: "none" },
+  });
 }
 
 export async function certificatePngToPdf(dataUrl, orientation = "landscape") {

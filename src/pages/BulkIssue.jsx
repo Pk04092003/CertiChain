@@ -141,10 +141,17 @@ async function captureCertificate(container) {
   if (!sheet) throw new Error("Certificate preview is not ready.");
 
   await waitForCertificateRender();
+  // The on-screen preview is CSS-scaled to fit the modal. Remove that scale
+  // during capture so the certificate content fills the complete A4 export.
+  const pageWidth = Number.parseFloat(sheet.style.width) || 1123;
+  const pageHeight = Number.parseFloat(sheet.style.height) || 794;
   return toPng(sheet, {
+    width: pageWidth,
+    height: pageHeight,
     pixelRatio: 2,
     cacheBust: true,
-    backgroundColor: "#ffffff",
+    backgroundColor: sheet.style.backgroundColor || "#ffffff",
+    style: { transform: "none", transformOrigin: "top left", boxShadow: "none" },
   });
 }
 

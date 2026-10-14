@@ -19,6 +19,9 @@ import {
   Undo2,
   Redo2,
   Upload,
+  Star,
+  Circle,
+  RectangleHorizontal,
 } from "lucide-react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import QRCode from "qrcode";
@@ -1018,6 +1021,61 @@ export default function TemplateEditor() {
     setStatus(`Inserted {{${variable.key}}} at the selected cursor position.`);
   };
 
+  const addLine = () => {
+    if (!page) {
+      setStatus("Choose an orientation first.");
+      return;
+    }
+    const item = {
+      id: uid("line"),
+      kind: "line",
+      x1: page.width * 0.2,
+      y1: page.height * 0.5,
+      x2: page.width * 0.8,
+      y2: page.height * 0.5,
+      stroke: "#1d4ed8",
+      strokeWidth: 3,
+      designElement: false,
+    };
+    const next = [...elements, item];
+    setElements(next);
+    setSelectedId(item.id);
+    pushSnapshot(next);
+    setStatus("Horizontal line added. Select it to move or rotate it.");
+  };
+
+  const addShape = (kind) => {
+    if (!page) {
+      setStatus("Choose an orientation first.");
+      return;
+    }
+    const dimensions = kind === "square" || kind === "circle" || kind === "star"
+      ? { width: 120, height: 120 }
+      : { width: kind === "rect" ? 240 : 120, height: 120 };
+    const item = {
+      id: uid(kind),
+      kind: kind === "square" ? "rect" : kind,
+      x: page.width / 2,
+      y: page.height / 2,
+      ...dimensions,
+      fill: kind === "star" ? "#f4c542" : "#dbeafe",
+      radius: 0,
+      rotation: 0,
+      designElement: false,
+    };
+    const next = [...elements, item];
+    setElements(next);
+    setSelectedId(item.id);
+    pushSnapshot(next);
+    setStatus(`${kind === "rect" ? "Rectangle" : kind[0].toUpperCase() + kind.slice(1)} added. Select it to move, resize, rotate, and recolour it.`);
+  };
+
+  const changePageBackground = (value) => {
+    setBackground(value);
+    pushSnapshot(elements, designId, value);
+    setStatus("Page background colour updated.");
+  };
+
   const addParagraph = () => {
     if (!page) {
       setStatus("Choose an orientation first.");
@@ -1810,6 +1868,24 @@ export default function TemplateEditor() {
         </div>
       </section>
 
+      <section className="mb-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="flex items-center gap-2">
+          <Palette size={18} className="text-blue-600" />
+          <h3 className="font-bold text-slate-900">Page colour</h3>
+        </div>
+        <p className="mt-1 text-xs text-slate-500">Change the actual certificate sheet background. This colour is included in the saved template and export.</p>
+        <div className="mt-3 flex flex-wrap items-center gap-3">
+          <label className="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm">
+            <input aria-label="Choose page background colour" type="color" value={/^#[0-9a-fA-F]{6}$/.test(background) ? background : "#ffffff"} onChange={(e) => changePageBackground(e.target.value)} className="h-8 w-10 cursor-pointer border-0 bg-transparent p-0" />
+            <span className="font-medium text-slate-700">{background.toUpperCase()}</span>
+          </label>
+          {["#FFFFFF", "#F8FBFF", "#FFF8E7", "#F0FDF4", "#FDF2F8", "#F5F3FF", "#EAF4FF"].map((color) => (
+            <button key={color} type="button" title={color} aria-label={`Set page colour ${color}`} onClick={() => changePageBackground(color.toLowerCase())} className={`h-9 w-9 rounded-full border-2 ${background.toLowerCase() === color.toLowerCase() ? "border-blue-600 ring-2 ring-blue-100" : "border-slate-200"}`} style={{ backgroundColor: color }} />
+          ))}
+          <button type="button" onClick={() => changePageBackground("#ffffff")} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50">Reset to white</button>
+        </div>
+      </section>
+
       <div className="grid min-w-0 gap-5 xl:grid-cols-[220px_minmax(0,1fr)_370px]">
         <aside className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="text-xs font-semibold uppercase tracking-wider text-slate-400">
@@ -1853,6 +1929,25 @@ export default function TemplateEditor() {
               className="flex w-full items-center gap-3 rounded-xl border border-slate-200 px-3 py-3 text-sm font-medium hover:bg-slate-50"
             >
               <QrCode size={18} className="text-blue-600" /> QR code
+            </button>
+
+            <button
+              onClick={addLine}
+              className="flex w-full items-center gap-3 rounded-xl border border-slate-200 px-3 py-3 text-sm font-medium hover:bg-slate-50"
+            >
+              <Minus size={18} className="text-blue-600" /> Single line
+            </button>
+            <button onClick={() => addShape("star")} className="flex w-full items-center gap-3 rounded-xl border border-slate-200 px-3 py-3 text-sm font-medium hover:bg-slate-50">
+              <Star size={18} className="text-amber-500" /> Star
+            </button>
+            <button onClick={() => addShape("circle")} className="flex w-full items-center gap-3 rounded-xl border border-slate-200 px-3 py-3 text-sm font-medium hover:bg-slate-50">
+              <Circle size={18} className="text-blue-600" /> Circle
+            </button>
+            <button onClick={() => addShape("square")} className="flex w-full items-center gap-3 rounded-xl border border-slate-200 px-3 py-3 text-sm font-medium hover:bg-slate-50">
+              <Square size={18} className="text-blue-600" /> Square
+            </button>
+            <button onClick={() => addShape("rect")} className="flex w-full items-center gap-3 rounded-xl border border-slate-200 px-3 py-3 text-sm font-medium hover:bg-slate-50">
+              <RectangleHorizontal size={18} className="text-blue-600" /> Rectangle
             </button>
           </div>
 
@@ -2954,6 +3049,16 @@ function PageElement({
       >
         {selectionControls}
       </div>
+    );
+  }
+
+  if (item.kind === "star") {
+    return (
+      <div
+        style={{ ...boxStyle, background: item.fill || "#f4c542", clipPath: "polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%)", cursor: selected ? "move" : "pointer" }}
+        onClick={select}
+        onPointerDown={(event) => { event.stopPropagation(); onPointerDown(event); }}
+      >{selectionControls}</div>
     );
   }
 

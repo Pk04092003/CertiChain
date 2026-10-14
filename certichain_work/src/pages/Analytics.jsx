@@ -1,0 +1,19 @@
+import Layout from "../components/Layout";
+import { useEffect, useMemo, useState } from "react";
+import { BarChart3, CheckCircle2, Mail, Ban, FileText } from "lucide-react";
+import { loadIssuedCertificates } from "../certificateStore";
+
+function nameOf(r){return r?.data?.name||r?.data?.student_name||r?.data?.recipient_name||r?.data?.[r?.template?.variables?.[0]?.key]||"Participant"}
+function courseOf(r){return r?.data?.course||r?.templateName||"Certificate"}
+export default function Analytics(){
+ const [records,setRecords]=useState(loadIssuedCertificates());
+ useEffect(()=>{const f=()=>setRecords(loadIssuedCertificates());window.addEventListener("certichain:issued-certificates-updated",f);const i=setInterval(f,1500);return()=>{window.removeEventListener("certichain:issued-certificates-updated",f);clearInterval(i)}} ,[])
+ const stats=useMemo(()=>{const now=new Date();const day=new Date(now.getFullYear(),now.getMonth(),now.getDate()).getTime();const month=new Date(now.getFullYear(),now.getMonth(),1).getTime();const year=new Date(now.getFullYear(),0,1).getTime();return {total:records.length,today:records.filter(r=>new Date(r.issuedAt).getTime()>=day).length,month:records.filter(r=>new Date(r.issuedAt).getTime()>=month).length,year:records.filter(r=>new Date(r.issuedAt).getTime()>=year).length,sent:records.filter(r=>r.emailStatus==="Sent").length,failed:records.filter(r=>r.emailStatus==="Failed").length,pending:records.filter(r=>!r.emailStatus||["Not sent","Sending…"].includes(r.emailStatus)).length,disq:records.filter(r=>r.status==="Disqualified").length,templates:new Set(records.map(r=>r.templateId)).size}},[records]);
+ const byCourse=useMemo(()=>{const map={};records.forEach(r=>{const k=courseOf(r);map[k]=(map[k]||0)+1});return Object.entries(map).sort((a,b)=>b[1]-a[1]).slice(0,8)},[records]);
+ const max=Math.max(1,...byCourse.map(x=>x[1]));
+ return <Layout title="Analytics" subtitle="Certificate and delivery performance"><div className="mx-auto max-w-7xl space-y-5">
+   <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">{[["Total Certificates",stats.total,FileText],["Today",stats.today,CheckCircle2],["Emails Sent",stats.sent,Mail],["Emails Failed",stats.failed,Ban],["Disqualified",stats.disq,Ban]].map(([l,v,I])=><div key={l} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><I size={20} className="text-blue-600"/><div className="mt-4 text-xs font-medium uppercase tracking-wider text-slate-400">{l}</div><div className="mt-1 text-3xl font-bold text-slate-900">{v}</div></div>)}</div>
+   <div className="grid gap-5 lg:grid-cols-3"><section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm lg:col-span-2"><div className="flex items-center gap-2"><BarChart3 className="text-blue-600"/><h2 className="font-bold">Certificates by course</h2></div><div className="mt-6 space-y-4">{byCourse.length?byCourse.map(([k,v])=><div key={k}><div className="flex justify-between text-sm"><span className="font-medium text-slate-700">{k}</span><b>{v}</b></div><div className="mt-2 h-3 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-blue-600" style={{width:`${Math.round(v/max*100)}%`}}/></div></div>):<div className="py-10 text-center text-sm text-slate-500">Issue certificates to build analytics.</div>}</div></section>
+   <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"><h2 className="font-bold">Overview</h2><div className="mt-5 space-y-4 text-sm">{[["This month",stats.month],["This year",stats.year],["Pending email",stats.pending],["Templates used",stats.templates]].map(([k,v])=><div key={k} className="flex items-center justify-between border-b border-slate-100 pb-3"><span className="text-slate-500">{k}</span><b>{v}</b></div>)}<div className="pt-2 text-xs leading-5 text-slate-400">Analytics are updated live from the certificate registry stored by CertiChain.</div></div></section></div>
+ </div></Layout>
+}
