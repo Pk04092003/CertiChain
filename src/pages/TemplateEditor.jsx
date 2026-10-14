@@ -2213,14 +2213,18 @@ export default function TemplateEditor() {
                         type="number"
                         min="40"
                         max={page.width}
-                        value={Math.round(selectedWidth || selected.width || 300)}
-                        onChange={(e) =>
+                        value={selectedWidth ?? selected.width ?? 300}
+                        onChange={(e) => {
+                          if (e.target.value === "") {
+                            setSelectedWidth(0);
+                            return;
+                          }
                           resizeSelected(
                             selected,
                             Number(e.target.value),
                             selectedHeight || selected.height || 70
-                          )
-                        }
+                          );
+                        }}
                         className="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2"
                       />
                     </label>
@@ -2231,18 +2235,18 @@ export default function TemplateEditor() {
                         type="number"
                         min="30"
                         max={page.height}
-                        value={Math.round(
-                          selectedHeight ||
-                            selected.height ||
-                            selected.fontSize * 2.5
-                        )}
-                        onChange={(e) =>
+                        value={selectedHeight ?? selected.height ?? selected.fontSize * 2.5}
+                        onChange={(e) => {
+                          if (e.target.value === "") {
+                            setSelectedHeight(0);
+                            return;
+                          }
                           resizeSelected(
                             selected,
                             selectedWidth || selected.width || 300,
                             Number(e.target.value)
-                          )
-                        }
+                          );
+                        }}
                         className="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2"
                       />
                     </label>
@@ -2410,14 +2414,18 @@ export default function TemplateEditor() {
                         type="number"
                         min="20"
                         max={page.width}
-                        value={Math.round(selectedWidth || selected.width || 100)}
-                        onChange={(e) =>
+                        value={selectedWidth ?? selected.width ?? 100}
+                        onChange={(e) => {
+                          if (e.target.value === "") {
+                            setSelectedWidth(0);
+                            return;
+                          }
                           resizeSelected(
                             selected,
                             Number(e.target.value),
                             selectedHeight || selected.height || 100
-                          )
-                        }
+                          );
+                        }}
                         className="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2"
                       />
                     </label>
@@ -2428,14 +2436,18 @@ export default function TemplateEditor() {
                         type="number"
                         min="20"
                         max={page.height}
-                        value={Math.round(selectedHeight || selected.height || 100)}
-                        onChange={(e) =>
+                        value={selectedHeight ?? selected.height ?? 100}
+                        onChange={(e) => {
+                          if (e.target.value === "") {
+                            setSelectedHeight(0);
+                            return;
+                          }
                           resizeSelected(
                             selected,
                             selectedWidth || selected.width || 100,
                             Number(e.target.value)
-                          )
-                        }
+                          );
+                        }}
                         className="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2"
                       />
                     </label>
