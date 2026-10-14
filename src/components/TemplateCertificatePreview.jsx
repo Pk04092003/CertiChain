@@ -400,6 +400,21 @@ export default function TemplateCertificatePreview({
             );
           }
 
+          const customShapeClips = {
+            triangle: "polygon(50% 0%, 0% 100%, 100% 100%)",
+            diamond: "polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)",
+            pentagon: "polygon(50% 0%, 100% 38%, 81% 100%, 19% 100%, 0% 38%)",
+            hexagon: "polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%)",
+            heart: "polygon(50% 95%, 8% 55%, 0% 35%, 8% 15%, 25% 5%, 42% 12%, 50% 25%, 58% 12%, 75% 5%, 92% 15%, 100% 35%, 92% 55%)",
+            octagon: "polygon(30% 0%, 70% 0%, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0% 70%, 0% 30%)",
+          };
+          if (customShapeClips[item.kind]) {
+            return <div key={item.id} style={{ ...style, background: item.fill || "#dbeafe", clipPath: customShapeClips[item.kind] }} />;
+          }
+          if (item.kind === "roundedRect") {
+            return <div key={item.id} style={{ ...style, background: item.fill || "#dbeafe", borderRadius: item.radius || 18 }} />;
+          }
+
           if (item.kind === "circle") {
             return (
               <div

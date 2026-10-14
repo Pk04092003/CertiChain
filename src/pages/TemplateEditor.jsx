@@ -464,6 +464,8 @@ export default function TemplateEditor() {
 
   const [orientation, setOrientation] = useState(null);
   const [designId, setDesignId] = useState("blank");
+  const [designsPopupOpen, setDesignsPopupOpen] = useState(false);
+  const [designElementColor, setDesignElementColor] = useState("#1d4ed8");
   const [background, setBackground] = useState("#ffffff");
   const [elements, setElements] = useState([]);
   const [variables, setVariables] = useState([]);
@@ -1049,17 +1051,19 @@ export default function TemplateEditor() {
       setStatus("Choose an orientation first.");
       return;
     }
-    const dimensions = kind === "square" || kind === "circle" || kind === "star"
+    const dimensions = kind === "square" || kind === "circle" || kind === "star" || kind === "triangle" || kind === "diamond" || kind === "pentagon" || kind === "hexagon" || kind === "heart" || kind === "octagon"
       ? { width: 120, height: 120 }
-      : { width: kind === "rect" ? 240 : 120, height: 120 };
+      : { width: kind === "rect" || kind === "roundedRect" ? 240 : 120, height: 120 };
     const item = {
       id: uid(kind),
-      kind: kind === "square" ? "rect" : kind,
+      kind: kind === "square" ? "rect" : kind === "roundedRect" ? "roundedRect" : kind,
       x: page.width / 2,
       y: page.height / 2,
       ...dimensions,
-      fill: kind === "star" ? "#f4c542" : "#dbeafe",
-      radius: 0,
+      fill: designElementColor,
+      stroke: designElementColor,
+      strokeWidth: 2,
+      radius: kind === "roundedRect" ? 18 : 0,
       rotation: 0,
       designElement: false,
     };
@@ -1068,6 +1072,24 @@ export default function TemplateEditor() {
     setSelectedId(item.id);
     pushSnapshot(next);
     setStatus(`${kind === "rect" ? "Rectangle" : kind[0].toUpperCase() + kind.slice(1)} added. Select it to move, resize, rotate, and recolour it.`);
+  };
+
+  const applyDesignElementColor = (value) => {
+    const color = String(value || "").trim();
+    if (!/^#[0-9a-fA-F]{6}$/.test(color)) return;
+    setDesignElementColor(color);
+    const next = elements.map((item) => {
+      // Recolour decorative layout elements and shapes/lines, but preserve text and uploaded images.
+      if (item.kind === "text" || item.kind === "image" || item.kind === "qr") return item;
+      return {
+        ...item,
+        ...(item.fill ? { fill: color } : {}),
+        ...(item.stroke ? { stroke: color } : {}),
+      };
+    });
+    setElements(next);
+    pushSnapshot(next, designId, background);
+    setStatus(`Design colour changed to ${color}. New shapes will use this colour too.`);
   };
 
   const changePageBackground = (value) => {
@@ -1836,37 +1858,73 @@ export default function TemplateEditor() {
       </div>
 
       <section className="mb-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <div className="flex items-center gap-2">
-              <Palette size={18} className="text-blue-600" />
-              <h3 className="font-bold text-slate-900">Page designs</h3>
-            </div>
-            <p className="mt-1 text-xs text-slate-500">
-              Choose a starting design. The design is rendered directly inside the editing sheet.
-            </p>
+            <div className="flex items-center gap-2"><Palette size={18} className="text-blue-600" /><h3 className="font-bold text-slate-900">Designs</h3></div>
+            <p className="mt-1 text-xs text-slate-500">Open the design library to choose a certificate layout or add decorative shapes.</p>
           </div>
-
-          <button
-            onClick={() => useDesign("blank")}
-            className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600"
-          >
-            Blank
-          </button>
+          <button type="button" onClick={() => setDesignsPopupOpen(true)} className="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-700">Browse designs & shapes</button>
         </div>
-
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-          {DESIGNS.map((design) => (
-            <DesignCard
-              key={design.id}
-              design={design}
-              selected={designId === design.id}
-              orientation={orientation}
-              onUse={() => useDesign(design.id)}
-            />
-          ))}
-        </div>
+        <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-600"><span className="rounded-full bg-blue-50 px-3 py-1.5">Current layout: {designName(designId)}</span><span className="rounded-full bg-slate-100 px-3 py-1.5">{elements.length} elements</span></div>
       </section>
+
+      {designsPopupOpen && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-950/60 p-3 sm:p-6" role="dialog" aria-modal="true" aria-label="Design library" onMouseDown={(e) => { if (e.target === e.currentTarget) setDesignsPopupOpen(false); }}>
+          <div className="max-h-[90vh] w-full max-w-5xl overflow-y-auto rounded-2xl bg-white p-4 shadow-2xl sm:p-6">
+            <div className="flex items-start justify-between gap-4 border-b border-slate-200 pb-4">
+              <div><h2 className="text-xl font-bold text-slate-900">Design library</h2><p className="mt-1 text-sm text-slate-500">Select a certificate layout or add a design element to the current page.</p></div>
+              <button type="button" onClick={() => setDesignsPopupOpen(false)} className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Close ✕</button>
+            </div>
+            <section className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h3 className="font-semibold text-slate-800">Design colours</h3>
+                  <p className="mt-1 text-xs text-slate-500">Choose a colour for decorative shapes and lines. Apply it to existing design elements or use it for new shapes.</p>
+                </div>
+                <label className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm">
+                  <input aria-label="Choose design element colour" type="color" value={designElementColor} onChange={(e) => setDesignElementColor(e.target.value)} className="h-8 w-10 cursor-pointer border-0 bg-transparent p-0" />
+                  <span className="font-mono text-xs font-semibold text-slate-700">{designElementColor.toUpperCase()}</span>
+                </label>
+              </div>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                {["#1d4ed8", "#7c3aed", "#b88917", "#166534", "#be123c", "#0f766e", "#111827", "#ea580c", "#db2777", "#64748b"].map((color) => (
+                  <button key={color} type="button" title={color} aria-label={`Choose design colour ${color}`} onClick={() => setDesignElementColor(color)} className={`h-8 w-8 rounded-full border-2 ${designElementColor.toLowerCase() === color ? "border-slate-900 ring-2 ring-blue-200" : "border-white shadow-sm"}`} style={{ backgroundColor: color }} />
+                ))}
+                <button type="button" onClick={() => applyDesignElementColor(designElementColor)} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">Apply to existing designs</button>
+              </div>
+            </section>
+            <h3 className="mb-3 mt-5 font-semibold text-slate-800">Certificate layouts</h3>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {DESIGNS.map((design) => <DesignCard key={design.id} design={design} selected={designId === design.id} orientation={orientation} onUse={() => { useDesign(design.id); setDesignsPopupOpen(false); }} />)}
+              {[
+                {id:"crimson-red",name:"Crimson Prestige",description:"Red accents for formal awards"},
+                {id:"teal-modern",name:"Teal Modern",description:"Fresh contemporary certificate"},
+                {id:"rose-elegance",name:"Rose Elegance",description:"Soft rose and blush styling"},
+                {id:"midnight-black",name:"Midnight Black",description:"Bold monochrome award"},
+                {id:"ocean-teal",name:"Ocean Teal",description:"Cool blue-green formal theme"},
+                {id:"sunset-orange",name:"Sunset Orange",description:"Warm celebratory layout"}
+              ].map((design) => <button key={design.id} type="button" onClick={() => { const colorMap={"crimson-red":"#9f1239","teal-modern":"#0f766e","rose-elegance":"#be185d","midnight-black":"#111827","ocean-teal":"#0e7490","sunset-orange":"#c2410c"}; changePageBackground(({"crimson-red":"#fff7f8","teal-modern":"#f0fdfa","rose-elegance":"#fff1f2","midnight-black":"#f8fafc","ocean-teal":"#ecfeff","sunset-orange":"#fff7ed"})[design.id]); setDesignId("blank"); setDesignsPopupOpen(false); setStatus(`${design.name} theme applied. Add a border and decorative elements to complete the layout.`); }} className="rounded-xl border border-slate-200 p-3 text-left hover:border-blue-400 hover:bg-blue-50/40"><div className="mb-3 flex h-24 items-center justify-center rounded-lg" style={{background:({"crimson-red":"#fff7f8","teal-modern":"#f0fdfa","rose-elegance":"#fff1f2","midnight-black":"#f8fafc","ocean-teal":"#ecfeff","sunset-orange":"#fff7ed"})[design.id],border:`3px double ${{"crimson-red":"#9f1239","teal-modern":"#0f766e","rose-elegance":"#be185d","midnight-black":"#111827","ocean-teal":"#0e7490","sunset-orange":"#c2410c"}[design.id]}`}}><span className="text-sm font-bold" style={{color:({"crimson-red":"#9f1239","teal-modern":"#0f766e","rose-elegance":"#be185d","midnight-black":"#111827","ocean-teal":"#0e7490","sunset-orange":"#c2410c"})[design.id]}}>CERTIFICATE</span></div><div className="font-semibold text-slate-800">{design.name}</div><div className="mt-1 text-xs text-slate-500">{design.description}</div><div className="mt-2 text-xs font-semibold text-blue-600">Apply theme</div></button>)}
+            </div>
+            <h3 className="mb-3 mt-6 border-t border-slate-200 pt-5 font-semibold text-slate-800">Add design elements</h3>
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+              {[
+                {name:"Single line",icon:"—",action:()=>addLine()},
+                {name:"Star",icon:"☆",action:()=>addShape("star")},
+                {name:"Circle",icon:"○",action:()=>addShape("circle")},
+                {name:"Square",icon:"□",action:()=>addShape("square")},
+                {name:"Rectangle",icon:"▭",action:()=>addShape("rect")},
+                {name:"Triangle",icon:"△",action:()=>addShape("triangle")},
+                {name:"Diamond",icon:"◇",action:()=>addShape("diamond")},
+                {name:"Pentagon",icon:"⬠",action:()=>addShape("pentagon")},
+                {name:"Hexagon",icon:"⬡",action:()=>addShape("hexagon")},
+                {name:"Heart",icon:"♡",action:()=>addShape("heart")},
+                {name:"Octagon",icon:"⯃",action:()=>addShape("octagon")},
+                {name:"Rounded rectangle",icon:"▱",action:()=>addShape("roundedRect")},
+              ].map((item) => <button key={item.name} type="button" onClick={() => { item.action(); setDesignsPopupOpen(false); }} className="flex items-center gap-3 rounded-xl border border-slate-200 px-4 py-3 text-left text-sm font-medium text-slate-800 hover:border-blue-400 hover:bg-blue-50"><span className="w-7 text-center text-2xl leading-none text-blue-600">{item.icon}</span>{item.name}<Plus size={15} className="ml-auto text-slate-400" /></button>)}
+            </div>
+          </div>
+        </div>
+      )}
 
       <section className="mb-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="flex items-center gap-2">
@@ -3072,6 +3130,22 @@ function PageElement({
         onPointerDown={(event) => { event.stopPropagation(); onPointerDown(event); }}
       >{selectionControls}</div>
     );
+  }
+
+  const customShapeClips = {
+    triangle: "polygon(50% 0%, 0% 100%, 100% 100%)",
+    diamond: "polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)",
+    pentagon: "polygon(50% 0%, 100% 38%, 81% 100%, 19% 100%, 0% 38%)",
+    hexagon: "polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%)",
+    heart: "polygon(50% 95%, 8% 55%, 0% 35%, 8% 15%, 25% 5%, 42% 12%, 50% 25%, 58% 12%, 75% 5%, 92% 15%, 100% 35%, 92% 55%)",
+    octagon: "polygon(30% 0%, 70% 0%, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0% 70%, 0% 30%)",
+  };
+  if (customShapeClips[item.kind]) {
+    return <div style={{ ...boxStyle, background: item.fill || "#dbeafe", clipPath: customShapeClips[item.kind], cursor: selected ? "move" : "pointer" }} onClick={select} onPointerDown={(event) => { event.stopPropagation(); onPointerDown(event); }}>{selectionControls}</div>;
+  }
+
+  if (item.kind === "roundedRect") {
+    return <div style={{ ...boxStyle, background: item.fill || "#dbeafe", borderRadius: item.radius || 18, cursor: selected ? "move" : "pointer" }} onClick={select} onPointerDown={(event) => { event.stopPropagation(); onPointerDown(event); }}>{selectionControls}</div>;
   }
 
   if (item.kind === "line") {
