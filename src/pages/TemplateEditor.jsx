@@ -465,6 +465,7 @@ export default function TemplateEditor() {
   const [orientation, setOrientation] = useState(null);
   const [designId, setDesignId] = useState("blank");
   const [designsPopupOpen, setDesignsPopupOpen] = useState(false);
+  const [elementsPopupOpen, setElementsPopupOpen] = useState(false);
   const [designElementColor, setDesignElementColor] = useState("#1d4ed8");
   const [background, setBackground] = useState("#ffffff");
   const [elements, setElements] = useState([]);
@@ -1861,7 +1862,7 @@ export default function TemplateEditor() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <div className="flex items-center gap-2"><Palette size={18} className="text-blue-600" /><h3 className="font-bold text-slate-900">Designs</h3></div>
-            <p className="mt-1 text-xs text-slate-500">Open the design library to choose a certificate layout or add decorative shapes.</p>
+            <p className="mt-1 text-xs text-slate-500">Choose a certificate layout. Add lines and decorative shapes from Elements.</p>
           </div>
           <button type="button" onClick={() => setDesignsPopupOpen(true)} className="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-700">Browse designs & shapes</button>
         </div>
@@ -1872,41 +1873,36 @@ export default function TemplateEditor() {
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-950/60 p-3 sm:p-6" role="dialog" aria-modal="true" aria-label="Design library" onMouseDown={(e) => { if (e.target === e.currentTarget) setDesignsPopupOpen(false); }}>
           <div className="max-h-[90vh] w-full max-w-5xl overflow-y-auto rounded-2xl bg-white p-4 shadow-2xl sm:p-6">
             <div className="flex items-start justify-between gap-4 border-b border-slate-200 pb-4">
-              <div><h2 className="text-xl font-bold text-slate-900">Design library</h2><p className="mt-1 text-sm text-slate-500">Select a certificate layout or add a design element to the current page.</p></div>
+              <div><h2 className="text-xl font-bold text-slate-900">Design library</h2><p className="mt-1 text-sm text-slate-500">Choose a certificate layout for your current page.</p></div>
               <button type="button" onClick={() => setDesignsPopupOpen(false)} className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Close ✕</button>
             </div>
-            <section className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <h3 className="font-semibold text-slate-800">Design colours</h3>
-                  <p className="mt-1 text-xs text-slate-500">Choose a colour for decorative shapes and lines. Apply it to existing design elements or use it for new shapes.</p>
-                </div>
-                <label className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm">
-                  <input aria-label="Choose design element colour" type="color" value={designElementColor} onChange={(e) => setDesignElementColor(e.target.value)} className="h-8 w-10 cursor-pointer border-0 bg-transparent p-0" />
-                  <span className="font-mono text-xs font-semibold text-slate-700">{designElementColor.toUpperCase()}</span>
-                </label>
-              </div>
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                {["#1d4ed8", "#7c3aed", "#b88917", "#166534", "#be123c", "#0f766e", "#111827", "#ea580c", "#db2777", "#64748b"].map((color) => (
-                  <button key={color} type="button" title={color} aria-label={`Choose design colour ${color}`} onClick={() => setDesignElementColor(color)} className={`h-8 w-8 rounded-full border-2 ${designElementColor.toLowerCase() === color ? "border-slate-900 ring-2 ring-blue-200" : "border-white shadow-sm"}`} style={{ backgroundColor: color }} />
-                ))}
-                <button type="button" onClick={() => applyDesignElementColor(designElementColor)} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">Apply to existing designs</button>
-              </div>
-            </section>
             <h3 className="mb-3 mt-5 font-semibold text-slate-800">Certificate layouts</h3>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {DESIGNS.map((design) => <DesignCard key={design.id} design={design} selected={designId === design.id} orientation={orientation} onUse={() => { useDesign(design.id); setDesignsPopupOpen(false); }} />)}
-              {[
-                {id:"crimson-red",name:"Crimson Prestige",description:"Red accents for formal awards"},
-                {id:"teal-modern",name:"Teal Modern",description:"Fresh contemporary certificate"},
-                {id:"rose-elegance",name:"Rose Elegance",description:"Soft rose and blush styling"},
-                {id:"midnight-black",name:"Midnight Black",description:"Bold monochrome award"},
-                {id:"ocean-teal",name:"Ocean Teal",description:"Cool blue-green formal theme"},
-                {id:"sunset-orange",name:"Sunset Orange",description:"Warm celebratory layout"}
-              ].map((design) => <button key={design.id} type="button" onClick={() => { const colorMap={"crimson-red":"#9f1239","teal-modern":"#0f766e","rose-elegance":"#be185d","midnight-black":"#111827","ocean-teal":"#0e7490","sunset-orange":"#c2410c"}; changePageBackground(({"crimson-red":"#fff7f8","teal-modern":"#f0fdfa","rose-elegance":"#fff1f2","midnight-black":"#f8fafc","ocean-teal":"#ecfeff","sunset-orange":"#fff7ed"})[design.id]); setDesignId("blank"); setDesignsPopupOpen(false); setStatus(`${design.name} theme applied. Add a border and decorative elements to complete the layout.`); }} className="rounded-xl border border-slate-200 p-3 text-left hover:border-blue-400 hover:bg-blue-50/40"><div className="mb-3 flex h-24 items-center justify-center rounded-lg" style={{background:({"crimson-red":"#fff7f8","teal-modern":"#f0fdfa","rose-elegance":"#fff1f2","midnight-black":"#f8fafc","ocean-teal":"#ecfeff","sunset-orange":"#fff7ed"})[design.id],border:`3px double ${{"crimson-red":"#9f1239","teal-modern":"#0f766e","rose-elegance":"#be185d","midnight-black":"#111827","ocean-teal":"#0e7490","sunset-orange":"#c2410c"}[design.id]}`}}><span className="text-sm font-bold" style={{color:({"crimson-red":"#9f1239","teal-modern":"#0f766e","rose-elegance":"#be185d","midnight-black":"#111827","ocean-teal":"#0e7490","sunset-orange":"#c2410c"})[design.id]}}>CERTIFICATE</span></div><div className="font-semibold text-slate-800">{design.name}</div><div className="mt-1 text-xs text-slate-500">{design.description}</div><div className="mt-2 text-xs font-semibold text-blue-600">Apply theme</div></button>)}
+
             </div>
-            <h3 className="mb-3 mt-6 border-t border-slate-200 pt-5 font-semibold text-slate-800">Add design elements</h3>
-            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+
+          </div>
+        </div>
+      )}
+
+      {elementsPopupOpen && (
+        <div className="fixed inset-0 z-[210] flex items-center justify-center bg-slate-950/60 p-3 sm:p-6" role="dialog" aria-modal="true" aria-label="Elements library" onMouseDown={(e) => { if (e.target === e.currentTarget) setElementsPopupOpen(false); }}>
+          <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white p-4 shadow-2xl sm:p-6">
+            <div className="flex items-start justify-between gap-4 border-b border-slate-200 pb-4">
+              <div><h2 className="text-xl font-bold text-slate-900">Elements library</h2><p className="mt-1 text-sm text-slate-500">Choose a shape or line to add it to the current certificate.</p></div>
+              <button type="button" onClick={() => setElementsPopupOpen(false)} className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Close ✕</button>
+            </div>
+            <section className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="font-semibold text-slate-800">Element colour</h3><p className="mt-1 text-xs text-slate-500">Choose a colour for new elements or recolour existing decorative elements.</p></div>
+                <label className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"><input aria-label="Choose element colour" type="color" value={designElementColor} onChange={(e) => setDesignElementColor(e.target.value)} className="h-8 w-10 cursor-pointer border-0 bg-transparent p-0"/><span className="font-mono text-xs font-semibold text-slate-700">{designElementColor.toUpperCase()}</span></label>
+              </div>
+              <div className="mt-3 flex flex-wrap items-center gap-2">{["#1d4ed8", "#7c3aed", "#b88917", "#166534", "#be123c", "#0f766e", "#111827", "#ea580c", "#db2777", "#64748b"].map((color) => <button key={color} type="button" title={color} aria-label={`Choose element colour ${color}`} onClick={() => setDesignElementColor(color)} className={`h-8 w-8 rounded-full border-2 ${designElementColor.toLowerCase() === color ? "border-slate-900 ring-2 ring-blue-200" : "border-white shadow-sm"}`} style={{backgroundColor:color}}/>)}
+                <button type="button" onClick={() => applyDesignElementColor(designElementColor)} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">Apply to existing elements</button>
+              </div>
+            </section>
+            <h3 className="mb-3 mt-5 font-semibold text-slate-800">Add an element</h3>
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
               {[
                 {name:"Single line",icon:"—",action:()=>addLine()},
                 {name:"Star",icon:"☆",action:()=>addShape("star")},
@@ -1920,7 +1916,7 @@ export default function TemplateEditor() {
                 {name:"Heart",icon:"♡",action:()=>addShape("heart")},
                 {name:"Octagon",icon:"⯃",action:()=>addShape("octagon")},
                 {name:"Rounded rectangle",icon:"▱",action:()=>addShape("roundedRect")},
-              ].map((item) => <button key={item.name} type="button" onClick={() => { item.action(); setDesignsPopupOpen(false); }} className="flex items-center gap-3 rounded-xl border border-slate-200 px-4 py-3 text-left text-sm font-medium text-slate-800 hover:border-blue-400 hover:bg-blue-50"><span className="w-7 text-center text-2xl leading-none text-blue-600">{item.icon}</span>{item.name}<Plus size={15} className="ml-auto text-slate-400" /></button>)}
+              ].map((item) => <button key={item.name} type="button" onClick={() => { item.action(); setElementsPopupOpen(false); }} className="flex items-center gap-3 rounded-xl border border-slate-200 px-4 py-3 text-left text-sm font-medium text-slate-800 hover:border-blue-400 hover:bg-blue-50"><span className="w-7 text-center text-2xl leading-none text-blue-600">{item.icon}</span>{item.name}<Plus size={15} className="ml-auto text-slate-400"/></button>)}
             </div>
           </div>
         </div>
@@ -1990,22 +1986,12 @@ export default function TemplateEditor() {
             </button>
 
             <button
-              onClick={addLine}
-              className="flex w-full items-center gap-3 rounded-xl border border-slate-200 px-3 py-3 text-sm font-medium hover:bg-slate-50"
+              type="button"
+              onClick={() => setElementsPopupOpen(true)}
+              className="flex w-full items-center gap-3 rounded-xl border border-blue-200 bg-blue-50 px-3 py-3 text-sm font-semibold text-blue-700 hover:bg-blue-100"
             >
-              <Minus size={18} className="text-blue-600" /> Single line
-            </button>
-            <button onClick={() => addShape("star")} className="flex w-full items-center gap-3 rounded-xl border border-slate-200 px-3 py-3 text-sm font-medium hover:bg-slate-50">
-              <Star size={18} className="text-amber-500" /> Star
-            </button>
-            <button onClick={() => addShape("circle")} className="flex w-full items-center gap-3 rounded-xl border border-slate-200 px-3 py-3 text-sm font-medium hover:bg-slate-50">
-              <Circle size={18} className="text-blue-600" /> Circle
-            </button>
-            <button onClick={() => addShape("square")} className="flex w-full items-center gap-3 rounded-xl border border-slate-200 px-3 py-3 text-sm font-medium hover:bg-slate-50">
-              <Square size={18} className="text-blue-600" /> Square
-            </button>
-            <button onClick={() => addShape("rect")} className="flex w-full items-center gap-3 rounded-xl border border-slate-200 px-3 py-3 text-sm font-medium hover:bg-slate-50">
-              <RectangleHorizontal size={18} className="text-blue-600" /> Rectangle
+              <Plus size={18} /> Design elements
+              <span className="ml-auto text-xs">Browse</span>
             </button>
           </div>
 
