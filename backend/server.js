@@ -689,6 +689,12 @@ app.post("/api/certificates/automate", requireAdmin, async (req, res) => {
 // ---------------------------------------------------------------------------
 // Public verification API — blockchain-backed and resilient to Mongo errors
 // ---------------------------------------------------------------------------
+// Lightweight warm-up endpoint for the admin login page; intentionally avoids database/RPC work.
+app.get("/api/ping", (_req, res) => {
+  res.set("Cache-Control", "no-store");
+  return res.status(200).json({ ok: true });
+});
+
 app.get("/api/public/health", async (_, res) => {
   const mongo = { configured: Boolean(mongoUri), available: false };
   if (mongo.configured) {

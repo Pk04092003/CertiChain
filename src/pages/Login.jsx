@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ShieldCheck, Eye } from "lucide-react";
-import { login } from "../authStore";
+import { login, warmAuthBackend } from "../authStore";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -10,6 +10,11 @@ export default function Login() {
   const [error, setError] = useState("");
 
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    // Start waking the backend while the administrator enters credentials.
+    void warmAuthBackend();
+  }, []);
 
   const submit = async (event) => {
     event.preventDefault();

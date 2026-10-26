@@ -20,6 +20,15 @@ export function loadUsers() {
   }
 }
 
+// Wake a sleeping Render instance as soon as the login page opens.
+export function warmAuthBackend() {
+  return fetch(`${API_BASE}/api/ping`, {
+    method: "GET",
+    headers: { Accept: "application/json" },
+    cache: "no-store",
+  }).catch(() => null);
+}
+
 export async function login(email, password) {
   const response = await fetch(`${API_BASE}/api/auth/login`, {
     method: "POST",
