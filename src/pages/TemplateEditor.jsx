@@ -463,6 +463,7 @@ export default function TemplateEditor() {
   const navigate = useNavigate();
 
   const [orientation, setOrientation] = useState(null);
+  const [editorZoom, setEditorZoom] = useState(125);
   const [designId, setDesignId] = useState("blank");
   const [designsPopupOpen, setDesignsPopupOpen] = useState(false);
   const [elementsPopupOpen, setElementsPopupOpen] = useState(false);
@@ -1940,7 +1941,7 @@ export default function TemplateEditor() {
         </div>
       </section>
 
-      <div className="grid min-w-0 gap-5 xl:grid-cols-[220px_minmax(0,1fr)_370px]">
+      <div className="grid min-w-0 gap-3 xl:grid-cols-[190px_minmax(0,1fr)_320px] 2xl:grid-cols-[210px_minmax(0,1fr)_340px]">
         <aside className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="text-xs font-semibold uppercase tracking-wider text-slate-400">
             Elements
@@ -2078,16 +2079,25 @@ export default function TemplateEditor() {
               </div>
             </div>
 
-            <span className="rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-slate-500">
-              {designName(designId)}
-            </span>
+            <div className="flex flex-wrap items-center justify-end gap-1.5">
+              <div className="flex items-center rounded-xl border border-slate-200 bg-white p-1 shadow-sm" aria-label="Editor zoom controls">
+                <button type="button" onClick={() => setEditorZoom((value) => Math.max(75, value - 10))} disabled={editorZoom <= 75} className="rounded-lg px-2.5 py-1.5 text-sm font-bold text-slate-600 hover:bg-slate-100 disabled:opacity-40" title="Zoom out">−</button>
+                <span className="min-w-[48px] text-center text-xs font-semibold text-slate-600">{editorZoom}%</span>
+                <button type="button" onClick={() => setEditorZoom((value) => Math.min(160, value + 10))} disabled={editorZoom >= 160} className="rounded-lg px-2.5 py-1.5 text-sm font-bold text-slate-600 hover:bg-slate-100 disabled:opacity-40" title="Zoom in">+</button>
+                <button type="button" onClick={() => setEditorZoom(100)} className="ml-1 rounded-lg bg-slate-100 px-2.5 py-1.5 text-[11px] font-semibold text-slate-600 hover:bg-blue-50 hover:text-blue-700" title="Fit sheet to workspace">Fit</button>
+              </div>
+              <span className="rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-slate-500">
+                {designName(designId)}
+              </span>
+            </div>
           </div>
 
-          <div className="flex min-h-[640px] w-full items-center justify-center overflow-hidden rounded-2xl bg-slate-200 p-4 sm:p-6">
+          <div className={`flex min-h-[760px] max-h-[calc(100vh-190px)] w-full min-w-0 items-start overflow-auto rounded-2xl bg-slate-200 p-3 sm:p-4 ${editorZoom > 100 ? "justify-start" : "justify-center"}`}>
             <div
               data-certificate-sheet
-              className="relative w-full max-w-[1123px] overflow-hidden bg-white shadow-2xl"
+              className="relative max-w-none shrink-0 overflow-hidden bg-white shadow-2xl"
               style={{
+                width: `${editorZoom}%`,
                 aspectRatio: `${page.width} / ${page.height}`,
                 background,
               }}
@@ -2135,7 +2145,7 @@ export default function TemplateEditor() {
           </div>
 
           <div className="mt-3 text-center text-xs text-slate-400">
-            {orientation} • {page.mmWidth} × {page.mmHeight} mm • select any element to edit
+            {orientation} • {page.mmWidth} × {page.mmHeight} mm • zoom {editorZoom}% • select any element to edit
           </div>
         </section>
 
