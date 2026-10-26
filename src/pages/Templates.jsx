@@ -24,7 +24,16 @@ export default function Templates(){
  const toggleLock=(t)=>{const next=read().map(x=>x.id===t.id?{...x,isLocked:!x.isLocked,updatedAt:new Date().toISOString(),version:Number(x.version||1)+1}:x);save(next);setItems(next);setMsg(`${t.name} is now ${!t.isLocked?"locked":"unlocked"}.`);addAuditLog(!t.isLocked?"Template locked":"Template unlocked",{templateId:t.id})}
  const duplicate=(t)=>{const copy={...structuredClone(t),id:uid("copy"),name:`${t.name} Copy`,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),version:Number(t.version||1)+1,status:"Draft",isDefault:false};save([copy,...read()]);setItems(read());setMsg(`Duplicated ${t.name}.`);addAuditLog("Template duplicated",{templateId:t.id,newTemplateId:copy.id})}
  const toggle=(t)=>{const next=read().map(x=>x.id===t.id?{...x,status:x.status==="Archived"?"Active":"Archived",updatedAt:new Date().toISOString(),version:Number(x.version||1)+1}:x);save(next);setItems(next)}
- const makeDefault=(t)=>{const next=read().map(x=>({...x,isDefault:x.id===t.id}));save(next);setItems(next);setMsg(`Default template set to ${t.name}.`)}
+ const makeDefault=(t)=>{
+  const current=read();
+  if(!current.some((item)=>item.id===t.id)){setMsg("Template could not be found. Refresh and try again.");return}
+  const now=new Date().toISOString();
+  const next=current.map((item)=>({...item,isDefault:item.id===t.id,updatedAt:item.id===t.id?now:item.updatedAt}));
+  save(next);
+  setItems(next);
+  setMsg(`Default template set to ${t.name}. It will be selected by default when issuing certificates.`);
+  addAuditLog("Default template changed",{templateId:t.id,name:t.name});
+}
  const remove=(t)=>{if(!confirm(`Delete ${t.name}? Issued certificate snapshots are not affected.`))return;save(read().filter(x=>x.id!==t.id));setItems(read().filter(x=>x.id!==t.id));addAuditLog("Template deleted",{templateId:t.id,name:t.name})}
  const downloadPng=async(t)=>{setPreview(t);setTimeout(async()=>{try{const sheet=previewRef.current?.querySelector?.('[data-certificate-sheet="true"]');const data=await toPng(sheet,{pixelRatio:2,cacheBust:true,backgroundColor:"#fff"});downloadDataUrl(data,`${slug(t.name)}.png`);setMsg(`Downloaded ${t.name} preview.`)}catch(e){setMsg(e.message||"PNG export failed.")}finally{setPreview(null)}},100)};
  const downloadPdf=async(t)=>{setPreview(t);setTimeout(async()=>{try{const sheet=previewRef.current?.querySelector?.('[data-certificate-sheet="true"]');const data=await toPng(sheet,{pixelRatio:2,cacheBust:true,backgroundColor:"#fff"});const pdf=await certificatePngToPdf(data,t.page?.orientation||"landscape");downloadBlob(pdf,`${slug(t.name)}.pdf`);setMsg(`Downloaded ${t.name} PDF.`)}catch(e){setMsg(e.message||"PDF export failed.")}finally{setPreview(null)}},100)};

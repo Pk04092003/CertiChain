@@ -311,15 +311,30 @@ export default function BulkIssue() {
   const bulkAutoEmailStartedRef = useRef(new Set());
 
   useEffect(() => {
-    try {
-      const stored = JSON.parse(localStorage.getItem("certichain-templates") || "[]");
-      const templates = Array.isArray(stored) ? stored : [];
-      setSavedTemplates(templates);
-      if (templates.length > 0) setSelectedTemplateId(templates[0].id);
-    } catch {
-      setSavedTemplates([]);
-      setSelectedTemplateId("");
-    }
+    const loadTemplates = () => {
+      try {
+        const stored = JSON.parse(localStorage.getItem("certichain-templates") || "[]");
+        const templates = Array.isArray(stored) ? stored : [];
+        setSavedTemplates(templates);
+        setSelectedTemplateId((currentId) => {
+          const currentStillExists = templates.some((template) => template.id === currentId);
+          if (currentStillExists) return currentId;
+          return (templates.find((template) => template.isDefault && template.status !== "Archived") ||
+            templates.find((template) => template.status !== "Archived") ||
+            templates[0])?.id || "";
+        });
+      } catch {
+        setSavedTemplates([]);
+        setSelectedTemplateId("");
+      }
+    };
+    loadTemplates();
+    window.addEventListener("certichain:templates-updated", loadTemplates);
+    window.addEventListener("storage", loadTemplates);
+    return () => {
+      window.removeEventListener("certichain:templates-updated", loadTemplates);
+      window.removeEventListener("storage", loadTemplates);
+    };
   }, []);
 
   const selectedTemplate =
