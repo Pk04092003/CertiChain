@@ -1551,6 +1551,31 @@ export default function TemplateEditor() {
     );
   };
 
+  const alignParagraphText = (alignment) => {
+    if (!selected || !page || selected.kind !== "text") return;
+
+    // Give paragraph content a broad, page-relative frame so alignment is
+    // measured against the certificate sheet rather than a narrow text box.
+    const paragraphWidth = page.width * 0.9;
+    const next = elements.map((item) =>
+      item.id === selected.id
+        ? {
+            ...item,
+            x: page.width / 2,
+            width: paragraphWidth,
+            align: alignment,
+          }
+        : item
+    );
+
+    setElements(next);
+    setSelectedWidth(paragraphWidth);
+    pushSnapshot(next);
+    setStatus(
+      `Paragraph text aligned ${alignment} relative to the certificate page.`
+    );
+  };
+
   const resizeSelected = (item, nextWidth, nextHeight) => {
     if (!page) return;
 
@@ -2166,7 +2191,7 @@ export default function TemplateEditor() {
 
               <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3">
                 <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-                  Horizontal position
+                  Element position on sheet
                 </div>
                 <div className="mt-2 grid grid-cols-3 gap-2">
                   {[
@@ -2185,7 +2210,38 @@ export default function TemplateEditor() {
                   ))}
                 </div>
                 <div className="mt-2 text-[10px] leading-4 text-slate-400">
-                  Places the selected element relative to the A4 sheet: left edge, center, or right edge.
+                  Positions the selected element box relative to the A4 sheet.
+                </div>
+              </div>
+
+              {selected.kind === "text" && (
+                <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                    Paragraph/text alignment
+                  </div>
+                  <div className="mt-2 grid grid-cols-3 gap-2">
+                    {[
+                      { key: "left", label: "Left" },
+                      { key: "center", label: "Center" },
+                      { key: "right", label: "Right" },
+                    ].map((option) => (
+                      <button
+                        key={option.key}
+                        type="button"
+                        onClick={() => alignParagraphText(option.key)}
+                        className={`rounded-lg border px-2 py-2 text-xs font-semibold ${
+                          (selected.align || "center") === option.key
+                            ? "border-blue-300 bg-blue-50 text-blue-700"
+                            : "border-slate-200 bg-white text-slate-600 hover:border-blue-300 hover:bg-blue-50"
+                        }`}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="mt-2 text-[10px] leading-4 text-slate-400">
+                    Aligns the paragraph content against a wide frame spanning 90% of the certificate page.
+                  </div>
                 </div>
               </div>
 
