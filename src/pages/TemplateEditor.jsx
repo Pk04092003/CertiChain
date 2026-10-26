@@ -2243,7 +2243,7 @@ export default function TemplateEditor() {
                     Aligns the paragraph content against a wide frame spanning 90% of the certificate page.
                   </div>
                 </div>
-              </div>
+              )}
 
               {isTextElement(selected) ? (
                 <div className="mt-4 space-y-3">
